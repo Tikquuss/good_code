@@ -37,7 +37,7 @@ patience_metric=val_accuracy
 early_stopping_step_val_acc_threshold=90.0
 
 ###
-./train.py \
+python train.py \
 		--batchsize -1 \
 		--n_layers 2 \
 		--n_heads 4 \
@@ -68,8 +68,8 @@ early_stopping_step_val_acc_threshold=90.0
 		--momentum 0.9 \
 		--random_seed $random_seed \
 		--max_steps $max_steps \
-		--use_cuda True \
-		--gpu -1 \
+		--accelerator auto \
+		--devices auto \
 		--early_stopping_patience $early_stopping_patience \
 		--patience_metric $patience_metric \
 		--early_stopping_step_val_acc_threshold $early_stopping_step_val_acc_threshold \

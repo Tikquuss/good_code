@@ -183,8 +183,6 @@ def train(hparams: Namespace) -> None:
 
     # Create the model
     model = TrainableTransformer(hparams).float()
- 
-    torch.save(model, os.path.join(checkpoint_path, "init.pt"))
 
     logger = CSVLogger(hparams.logdir)
 
@@ -241,6 +239,14 @@ def train(hparams: Namespace) -> None:
     trainer_args["callbacks"] = callbacks
     
     trainer = Trainer(**trainer_args) #, progress_bar_refresh_rate=0
+ 
+    # #torch.save(model, os.path.join(checkpoint_path, "init.pt"))
+    # trainer.save_checkpoint(
+    #     os.path.join(
+    #         model.hparams.checkpoint_path ,
+    #         "init.ckpt",
+    #     )
+    # )
 
     hparams.eval_only = False
     if not hparams.eval_only :

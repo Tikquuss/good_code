@@ -50,9 +50,10 @@ class TrainableTransformer(LightningModule):
         )
 
         # Intrinsic dimension params
-        if self.hparams.get("ID_params") is None : self.hparams["ID_params"] = {}
+        if self.hparams.get("ID_params", None) is None : self.hparams["ID_params"] = {}
         ID_params = {**{}, **self.hparams.get("ID_params", {"method" : "mle", "k":2})}
         id_funct = ID_functions.get(ID_params.pop("method", None), None)
+        setattr(self.hparams, "ID_for_attention_weigths_and_values", ID_params.pop("attention_weigths_and_values", False))
         self.ID_function = id_funct
         self.hparams.ID = id_funct is not None
         self.ID_params = ID_params
@@ -648,6 +649,13 @@ class TrainableTransformer(LightningModule):
         #return {"test_loss": loss, "log": logs}
 
     def on_train_start(self):
+        self.trainer.save_checkpoint(
+            os.path.join(
+                self.hparams.checkpoint_path,
+                "init.ckpt",
+            )
+        )
+        
         if self.hparams.use_wandb:
             db_data = {
                 "base_length" : self.hparams.data_module_params.base_length,
