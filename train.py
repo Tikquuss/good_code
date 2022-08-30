@@ -133,7 +133,7 @@ def train(hparams: Namespace) -> None:
 
     # set up wandb
     init_wandb(hparams)  
-    data_flag = True
+    data_flag = False
     device = "cpu"
     data_module = DataModule(
         train_data_pct = hparams.train_data_pct,  
@@ -262,15 +262,18 @@ def train(hparams: Namespace) -> None:
             print(r)
             print("Testing completed.")
     else :
+        hparams.eval_split = "validation"
         if not data_flag :
             # Evaluation
             print("Evaluation starts....")
-            if params.eval_split == "train":
+            if hparams.eval_split == "train":
                 data_module.test_dataloader = data_module.train_dataloader
-            elif params.eval_split == "validation" :
+            elif hparams.eval_split == "validation" :
                 data_module.test_dataloader = data_module.val_dataloader
             model.eval()
-            trainer.test(model, datamodule=data_module, ckpt_path=hparams.load_from_ckpt )
+            #r = trainer.test(model, datamodule=data_module, ckpt_path=hparams.load_from_ckpt)
+            r = trainer.validate(model, datamodule=data_module, ckpt_path=hparams.load_from_ckpt)
+            print(r)
             print("Evaluation completed.")
 
     return hparams.logdir

@@ -477,6 +477,7 @@ class TrainableTransformer(LightningModule):
                   attentions, and values
         """
         epoch_is_to_be_logged = True
+        logs = {}
         if epoch_is_to_be_logged:   
             with torch.no_grad():
                 try:
@@ -529,6 +530,32 @@ class TrainableTransformer(LightningModule):
                 db_data = {"epoch": self.current_epoch, "train loss": loss.detach(), "train accuracy": accuracy, 'lr': first_lr}
                 db_data = {**db_data, **id_output}
                 wandb.log(db_data)
+
+        # if self.current_epoch > 0 and self.hparams.save_checkpoint:
+        #     if self.current_epoch < 100 and self.current_epoch == int(2 ** (int(np.log(self.current_epoch) / np.log(2)))):
+        #         self.trainer.save_checkpoint(
+        #             os.path.join(
+        #                 self.hparams.checkpoint_path,
+        #                 "epoch_" + str(self.current_epoch) + ".ckpt",
+        #             )
+        #         )
+        #     elif self.current_epoch >= 100 and self.current_epoch % 50 == 0:
+        #         self.trainer.save_checkpoint(
+        #             os.path.join(
+        #                 self.hparams.checkpoint_path,
+        #                 "epoch_" + str(self.current_epoch) + ".ckpt",
+        #             )
+        #         )
+
+        if self.current_epoch % 1 == 0:
+            self.trainer.save_checkpoint(
+                os.path.join(
+                    self.hparams.checkpoint_path,
+                    "epoch_" + str(self.current_epoch) + ".ckpt",
+                )
+            )
+
+        return logs
 
     def validation_epoch_end(self, outputs):
         """
@@ -591,30 +618,6 @@ class TrainableTransformer(LightningModule):
                 db_data = {**db_data, **id_output}
                 wandb.log(db_data)
   
-        # if self.current_epoch > 0 and self.hparams.save_checkpoint:
-        #     if self.current_epoch < 100 and self.current_epoch == int(2 ** (int(np.log(self.current_epoch) / np.log(2)))):
-        #         self.trainer.save_checkpoint(
-        #             os.path.join(
-        #                 self.hparams.checkpoint_path,
-        #                 "epoch_" + str(self.current_epoch) + ".ckpt",
-        #             )
-        #         )
-        #     elif self.current_epoch >= 100 and self.current_epoch % 50 == 0:
-        #         self.trainer.save_checkpoint(
-        #             os.path.join(
-        #                 self.hparams.checkpoint_path,
-        #                 "epoch_" + str(self.current_epoch) + ".ckpt",
-        #             )
-        #         )
-
-        if self.current_epoch % 1 == 0:
-            self.trainer.save_checkpoint(
-                os.path.join(
-                    self.hparams.checkpoint_path,
-                    "epoch_" + str(self.current_epoch) + ".ckpt",
-                )
-            )
-
         if validation_is_real:
             return logs
 
@@ -646,7 +649,7 @@ class TrainableTransformer(LightningModule):
             db_data = {**db_data, **id_output}
             wandb.log(db_data) 
 
-        #return {"test_loss": loss, "log": logs}
+        return logs
 
     def on_train_start(self):
         self.trainer.save_checkpoint(

@@ -1,4 +1,4 @@
-pytorch_lightning
+pytorch_lightning==1.6.3
 torch
 blobfile
 numpy
