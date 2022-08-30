@@ -477,7 +477,6 @@ class TrainableTransformer(LightningModule):
                   attentions, and values
         """
         epoch_is_to_be_logged = True
-        logs = {}
         if epoch_is_to_be_logged:   
             with torch.no_grad():
                 try:
@@ -554,9 +553,7 @@ class TrainableTransformer(LightningModule):
                     "epoch_" + str(self.current_epoch) + ".ckpt",
                 )
             )
-
-        return logs
-
+        
     def validation_epoch_end(self, outputs):
         """
         Used by pytorch_lightning
