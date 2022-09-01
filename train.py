@@ -5,7 +5,7 @@ import torch
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import Callback, ModelCheckpoint, EarlyStopping
-from pytorch_lightning.loggers import CSVLogger
+from pytorch_lightning.loggers import CSVLogger, TensorBoardLogger
 
 from src.utils import bool_flag, str2dic_all, init_wandb, AttrDict, intorstr
 from src.data import DEFAULT_DATA_DIR
@@ -160,6 +160,7 @@ def train(hparams: Namespace) -> None:
         "val_data_size" : len(data_module.val_dataset),
         "val_batchsize" : data_module.val_batchsize,
         "batches_per_epoch_val" : data_module.batches_per_epoch_val,
+        "data_flag" : data_flag
     })
 
     # Process the args
@@ -185,17 +186,17 @@ def train(hparams: Namespace) -> None:
     model = TrainableTransformer(hparams).float()
 
     logger = CSVLogger(hparams.logdir)
+    logger2 = TensorBoardLogger(hparams.logdir)
 
     root_dir = hparams.logdir
     trainer_args = {
         "max_steps": hparams.max_steps,
         "min_steps": hparams.max_steps,
-        "max_epochs": 5, # hparams.max_epochs, 
+        "max_epochs": hparams.max_epochs, 
 
         "val_check_interval": 1.0,
         #"profiler": False,
         # "checkpoint_callback": checkpointer,
-        "logger": logger,
         #"log_every_n_steps": 1,
         #"flush_logs_every_n_steps": 1000,
 
@@ -204,11 +205,17 @@ def train(hparams: Namespace) -> None:
         "accelerator" : hparams.accelerator,
         "devices" : hparams.devices,
         #"reload_dataloaders_every_n_epochs" : True,
-        "weights_summary":"full", # "top", None,
+        #"weights_summary":"full", # "top", None,
     }
 
+    #trainer_args["logger"] = CSVLogger(hparams.logdir)
+    trainer_args["logger"] = [
+        CSVLogger(hparams.logdir),
+        TensorBoardLogger(hparams.logdir)
+    ]
+
     callbacks = []
-    if not data_flag and False :
+    if not data_flag :
         patience_metric = hparams.patience_metric
         mode = (lambda s : "min" if 'loss' in s else 'max')(patience_metric)
         early_stopping_callback = EarlyStopping(
@@ -220,7 +227,7 @@ def train(hparams: Namespace) -> None:
         mode = (lambda s : "min" if 'loss' in s else 'max')(validation_metric)
         hparams.save_top_k = -1
         model_checkpoint_callback = ModelCheckpoint(
-                dirpath=root_dir,
+                dirpath=hparams.checkpoint_path,
                 save_weights_only=True,
                 filename="{epoch}-{%s:.4f}"%validation_metric,
                 mode = mode,
@@ -233,7 +240,7 @@ def train(hparams: Namespace) -> None:
     callbacks += [
         #GenerateCallback(), 
         #pl.callbacks.LearningRateMonitor("epoch");
-        #StopTrainingCallback()
+        StopTrainingCallback()
     ]
 
     trainer_args["callbacks"] = callbacks
@@ -258,7 +265,8 @@ def train(hparams: Namespace) -> None:
         if not data_flag :
             print("Testing starts....")
             model.eval()
-            r = trainer.test(model, datamodule=data_module)
+            #r = trainer.test(model, datamodule=data_module)
+            r = trainer.validate(model, datamodule=data_module)
             print(r)
             print("Testing completed.")
     else :

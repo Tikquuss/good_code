@@ -523,7 +523,7 @@ class TrainableTransformer(LightningModule):
             logs = {**id_output, **logs}
 
             for k, v in logs.items():
-                self.log(k, v)
+                self.log(k, v, prog_bar="loss" in k or "accuracy" in k)
                 
             if self.hparams.use_wandb:
                 db_data = {"epoch": self.current_epoch, "train loss": loss.detach(), "train accuracy": accuracy, 'lr': first_lr}
@@ -546,7 +546,7 @@ class TrainableTransformer(LightningModule):
         #             )
         #         )
 
-        if self.current_epoch % 1 == 0:
+        if self.hparams.data_module_params.data_flag and self.current_epoch % 1 == 0:
             self.trainer.save_checkpoint(
                 os.path.join(
                     self.hparams.checkpoint_path,
@@ -606,7 +606,7 @@ class TrainableTransformer(LightningModule):
             #     logs["full_train_acc"] = tr_acc
 
             for k, v in logs.items():
-                self.log(k, v)
+                self.log(k, v, prog_bar="loss" in k or "accuracy" in k)
                 
             if self.hparams.use_wandb:
                 db_data = {"epoch": self.current_epoch, "val loss": loss.detach(), "val accuracy": accuracy,

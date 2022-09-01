@@ -13,8 +13,8 @@ opt=${5-adamw}
 max_lr=${6-0.001}
 random_seed=${7-0}
 
-#max_steps=100000
-max_steps=25
+max_steps=100000
+max_epochs=10000
 
 ### wandb ###
 # wandb_entity is the name of the team on wandb and is optional
@@ -73,6 +73,6 @@ python train.py \
 		--early_stopping_patience $early_stopping_patience \
 		--patience_metric $patience_metric \
 		--early_stopping_step_val_acc_threshold $early_stopping_step_val_acc_threshold \
-#		--max_epochs 1e9 \
+		--max_epochs $max_epochs \
 #		--load_from_ckpt None \
 #		--operand_length \
