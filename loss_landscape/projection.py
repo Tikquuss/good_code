@@ -8,10 +8,11 @@ import os
 import copy
 import h5py
 from sklearn.decomposition import PCA
+from IPython.display import clear_output
 
-from net_plotter import get_weights, load_directions, get_diff_weights, get_diff_states, ignore_biasbn
-from h5_util import write_list
-from model_loader import load
+from .net_plotter import get_weights, load_directions, get_diff_weights, get_diff_states, ignore_biasbn
+from .h5_util import write_list
+from .model_loader import load
 
 
 def tensorlist_to_tensor(weights):
@@ -151,7 +152,7 @@ def project_trajectory(dir_file, w, s, model_files,
     dy = nplist_to_tensor(directions[1])
 
     xcoord, ycoord = [], []
-    for model_file in model_files:
+    for count, model_file in enumerate(model_files):
         net2 = load(lightning_module_class, model_file = model_file)
         if dir_type == 'weights':
             w2 = get_weights(net2)
@@ -163,6 +164,9 @@ def project_trajectory(dir_file, w, s, model_files,
 
         x, y = project_2D(d, dx, dy, proj_method)
         print ("%s  (%.4f, %.4f)" % (model_file, x, y))
+        if count%100 == 0 : 
+            #os.system('cls')
+            clear_output(wait=True)
 
         xcoord.append(x)
         ycoord.append(y)
@@ -201,8 +205,11 @@ def setup_PCA_directions(args, model_files, w, s, lightning_module_class = None)
 
     # load models and prepare the optimization path matrix
     matrix = []
-    for model_file in model_files:
-        print (model_file)
+    for count, model_file in enumerate(model_files):
+        print(model_file)
+        if count%100 == 0 : 
+            #os.system('cls')
+            clear_output(wait=True)
         net2 = load(lightning_module_class, model_file = model_file)
         d = None
         if args.dir_type == 'weights':

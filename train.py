@@ -177,7 +177,6 @@ def train(hparams: Namespace) -> None:
     )
     hparams.d_key = hparams.d_model / hparams.n_heads
 
-    ## 
     checkpoint_path = hparams.logdir + "/checkpoints"
     os.makedirs(checkpoint_path, exist_ok=True)
     hparams.checkpoint_path = checkpoint_path
@@ -185,8 +184,8 @@ def train(hparams: Namespace) -> None:
     # Create the model
     model = TrainableTransformer(hparams).float()
 
-    logger = CSVLogger(hparams.logdir)
-    logger2 = TensorBoardLogger(hparams.logdir)
+    torch.save(data_module, hparams.logdir + "/data.pt")
+    torch.save(hparams, hparams.logdir + "/hparams.pt")
 
     root_dir = hparams.logdir
     trainer_args = {

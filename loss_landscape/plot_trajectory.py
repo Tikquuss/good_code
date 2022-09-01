@@ -2,10 +2,10 @@
     Plot the optimization path in the space spanned by principle directions.
 """
 
-from plot_2D import plot_trajectory as plot_traj
-from projection import setup_PCA_directions, project_trajectory
-from model_loader import load
-from net_plotter import get_weights
+from .plot_2D import plot_trajectory as plot_traj
+from .projection import setup_PCA_directions, project_trajectory
+from .model_loader import load
+from .net_plotter import get_weights
 
 def plot_trajectory(args, model_files, lightning_module_class) :
     last_model_file = model_files[-1] 

@@ -70,10 +70,9 @@ def eval_hess_vec_prod(vec, params, net, dataloader, evaluator, use_cuda=False):
         inputs = batch["text"]
         targets = batch["target"]
         inputs, targets = Variable(inputs), Variable(targets)
-        if use_cuda:
-            inputs, targets = inputs.cuda(), targets.cuda()
+        if use_cuda: inputs, targets = inputs.cuda(), targets.cuda()
 
-        loss = evaluator._get_loss(net, batch = (inputs, targets))
+        loss = evaluator._get_loss(net, batch = {"text" : inputs, "target" : targets})
         grad_f = torch.autograd.grad(loss, inputs=params, create_graph=True)
 
         # Compute inner product of gradient with the direction vector

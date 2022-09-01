@@ -10,18 +10,33 @@ import time
 import socket
 import torch.nn as nn
 import pytorch_lightning as pl
+from IPython.display import clear_output
 
-from plot_surface import name_surface_file, setup_surface_file
-from hess_vec_prod import min_max_hessian_eigs
-from model_loader import load
-from net_plotter import name_direction_file, setup_direction, load_directions, get_weights, set_weights, set_states
-from net_plotter import get_weights, set_weights, set_states
-from projection import cal_angle, nplist_to_tensor
-from scheduler import get_job_indices
-from plot_2D import plot_2d_eig_ratio
-from plot_1D import plot_1d_eig_ratio
-from mpi4pytorch import setup_MPI, barrier, reduce_min, reduce_max
-from evaluation import Evaluator
+from .plot_surface import name_surface_file, setup_surface_file
+from .hess_vec_prod import min_max_hessian_eigs
+from .model_loader import load
+from .net_plotter import name_direction_file, setup_direction, load_directions, get_weights, set_weights, set_states
+from .net_plotter import get_weights, set_weights, set_states
+from .projection import cal_angle, nplist_to_tensor
+from .scheduler import get_job_indices
+from .plot_2D import plot_2d_eig_ratio
+from .plot_1D import plot_1d_eig_ratio
+from .mpi4pytorch import setup_MPI, barrier, reduce_min, reduce_max
+from .evaluation import Evaluator
+
+def get_loss(pl_module, batch):
+    """
+    Given a batch of data, this function returns the  loss
+    """    
+    tmp = pl_module._step(
+        batch,
+        batch_idx = 0,
+        train = True,
+        reduction = "mean",
+        grads = False,
+    ) 
+    loss = tmp[0]
+    return loss
 
 def crunch_hessian_eigs(surf_file, net, w, s, d, dataloader, comm, rank, args, evaluator):
     """
@@ -89,6 +104,10 @@ def crunch_hessian_eigs(surf_file, net, w, s, d, dataloader, comm, rank, args, e
         print("rank: %d %d/%d  (%0.2f%%)  %d\t  %s \tmaxeig:%8.5f \tmineig:%8.5f \titer: %d \ttime:%.2f \tsync:%.2f" % ( \
             rank, count + 1, len(inds), 100.0 * (count + 1)/len(inds), ind, str(coord), \
             maxeig, mineig, iter_count, compute_time, sync_time))
+
+        if count%20 == 0 : 
+            #os.system('cls')
+            clear_output(wait=True)
 
     # This is only needed to make MPI run smoothly. If this process has less work
     # than the rank0 process, then we need to keep calling allreduce so the rank0 process doesn't block
@@ -194,61 +213,3 @@ def plot_hessian_eigen(args, lightning_module_class, dataloader, get_loss) :
             plot_1d_eig_ratio(surf_file, args.xmin, args.xmax, 'min_eig', 'max_eig')
 
     return dir_file, surf_file
-
-
-if __name__ == '__main__':
-
-    import argparse
-
-    parser = argparse.ArgumentParser(description='plotting hessian eigen values')
-    parser.add_argument('--mpi', '-m', action='store_true', help='use mpi')
-    parser.add_argument('--cuda', '-c', action='store_true', help='use cuda')
-    parser.add_argument('--threads', default=2, type=int, help='number of threads')
-    parser.add_argument('--ngpu', type=int, default=1, help='number of GPUs to use for each rank, useful for data parallel evaluation')
-
-    # data parameters
-    parser.add_argument('--raw_data', action='store_true', default=False, help='no data preprocessing')
-    parser.add_argument('--data_split', default=1, type=int, help='the number of splits for the dataloader')
-    parser.add_argument('--split_idx', default=0, type=int, help='the index of data splits for the dataloader')
-
-    # model parameters
-    parser.add_argument('--model', default='resnet56', help='model name')
-    parser.add_argument('--model_folder', default='', help='the common folder that contains model_file and model_file2')
-    parser.add_argument('--model_file', default='', help='path to the trained model file')
-    parser.add_argument('--model_file2', default='', help='use (model_file2 - model_file) as the xdirection')
-    parser.add_argument('--model_file3', default='', help='use (model_file3 - model_file) as the ydirection')
-    parser.add_argument('--loss_name', '-l', default='crossentropy', help='loss functions: crossentropy | mse')
-
-    # direction parameters
-    parser.add_argument('--dir_file', default='', help='specify the name of direction file, or the path to an eisting direction file')
-    parser.add_argument('--dir_type', default='weights', help='direction type: weights | states (including BN\'s running_mean/var)')
-    parser.add_argument('--x', default='-1:1:51', help='A string with format xmin:x_max:xnum')
-    parser.add_argument('--y', default=None, help='A string with format ymin:ymax:ynum')
-    parser.add_argument('--xnorm', default='', help='direction normalization: filter | layer | weight')
-    parser.add_argument('--ynorm', default='', help='direction normalization: filter | layer | weight')
-    parser.add_argument('--xignore', default='', help='ignore bias and BN parameters: biasbn')
-    parser.add_argument('--yignore', default='', help='ignore bias and BN parameters: biasbn')
-    parser.add_argument('--same_dir', action='store_true', default=False, help='use the same random direction for both x-axis and y-axis')
-    parser.add_argument('--idx', default=0, type=int, help='the index for the repeatness experiment')
-    parser.add_argument('--surf_file', default='', help='customize the name of surface file, could be an existing file.')
-
-    # plot parameters
-    parser.add_argument('--show', action='store_true', default=False, help='show plotted figures')
-    parser.add_argument('--plot', action='store_true', default=False, help='plot figures after computation')
-
-    args = parser.parse_args()
-
-    # TODO
-    dataloader = None
-    lightning_module_class = None
-
-    def get_loss(pl_module, batch):
-        """
-        Given a batch of data, this function returns the  loss
-        """    
-        x, y = batch
-        tensor = pl_module.forward(x)
-        loss = pl_module.criterion(input = tensor, target=y)
-        return loss
-
-    dir_file, surf_file = plot_hessian_eigen(args, lightning_module_class, dataloader, get_loss)
