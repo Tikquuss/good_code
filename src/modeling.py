@@ -72,6 +72,8 @@ class TrainableTransformer(LightningModule):
         self.comp_epoch = float("inf") # val_accuracy > 99.0%
         self.memo_epoch = float("inf") # train_accuracy > 99.0%
 
+        self.set_states()
+
         # Early stopping grokking : Stop the training `patience` epochs after the `metric` has reached the value `metric_threshold`
         early_stopping_grokking = self.hparams.early_stopping_grokking
         if type(early_stopping_grokking) != dict : early_stopping_grokking = {} 
@@ -82,6 +84,13 @@ class TrainableTransformer(LightningModule):
         self.es_mode = (lambda s : "min" if 'loss' in s else 'max')(self.es_metric)
         self.es_step = 0
         self.reached_limit = False
+
+    def set_states(self):
+        self.states = {
+            "grok":int(self.grok), "comprehension":int(self.comprehension), "memorization":int(self.memorization), "confusion":int(self.confusion),
+            "pre_comprehension_epoch":self.pre_comp_epoch, "pre_memorization_epoch":self.pre_memo_epoch,
+            "comprehension_epoch":self.comp_epoch, "memorization_epoch":self.memo_epoch,
+        }
 
     def _scheduler_lr(self, step: int) -> float:
         """
@@ -213,31 +222,6 @@ class TrainableTransformer(LightningModule):
             if reduction == "mean":
                 acc = acc.mean()
 
-        """
-        device = self.transformer.embedding.weight.device
-        self.margin = self.margin.to(device)
-
-        output = y_hat_rhs.clone()  # batchsize, vocabsize, rhs tokens
-        output_m = output.clone()  # batchsize, vocabsize, rhs tokens
-        target = y_rhs.clone()  # batchsize, rhs tokens
-
-        for i in range(output.size(0)):  # batch
-            for j in range(output.size(2)):  # rhs tokens
-                output_m[i, target[i, j], j] = output_m[i, :, j].min()
-
-        for i in range(output.size(2)):  # rhs tokens
-            output_compressed = output[:, target[:, i], i].squeeze().diag()
-            output_m_compressed = (
-                output_m[:, output_m.max(dim=1).indices[:, i], i].squeeze().diag()
-            )
-            self.margin = torch.cat(
-                (
-                    self.margin,
-                    (output_compressed - output_m_compressed),
-                ),
-                0,
-            )
-        """
         grad_vec = None
         if grads:
             loss.backward()
@@ -604,11 +588,8 @@ class TrainableTransformer(LightningModule):
             #     self.grok = diff_epoch >= 100
             #     self.comprehension = not self.grok
 
-            self.states = {
-                "grok":self.grok, "comprehension":self.comprehension, "memorization": self.memorization, "confusion":self.confusion,
-                "pre_comprehension_epoch":self.pre_comp_epoch, "pre_memorization_epoch":self.pre_memo_epoch,
-                "comprehension_epoch":self.comp_epoch, "memorization_epoch":self.memo_epoch,
-            }
+            self.set_states()
+            torch.save(self.states, self.hparams.logdir + "/states.pt")
             ##
 
             for k, v in logs.items():
@@ -689,12 +670,8 @@ class TrainableTransformer(LightningModule):
         #     self.grok = diff_epoch >= 100
         #     self.comprehension = not self.grok
 
-        states = {
-            "grok":int(self.grok), "comprehension":int(self.comprehension), "memorization":int(self.memorization), "confusion":int(self.confusion),
-            "pre_comprehension_epoch":self.pre_comp_epoch, "pre_memorization_epoch":self.pre_memo_epoch,
-            "comprehension_epoch":self.comp_epoch, "memorization_epoch":self.memo_epoch,
-        }
+        self.set_states()
         print("="*10)
-        print(states)
+        print(self.states)
         print("="*10)
-        self.send_dict_to_wandb(states, label = "states_info", title="Phase Informations")
+        self.send_dict_to_wandb(self.states, label = "states_info", title="Phase Informations")
