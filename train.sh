@@ -14,7 +14,7 @@ max_lr=${6-0.001}
 random_seed=${7-0}
 
 max_steps=100000
-max_epochs=1
+max_epochs=100000
 
 ### wandb ###
 # wandb_entity is the name of the team on wandb and is optional
