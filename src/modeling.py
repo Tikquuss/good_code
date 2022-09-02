@@ -452,13 +452,14 @@ class TrainableTransformer(LightningModule):
     def set_states(self, states : dict = None):
         if states is None :
             self.states = {
-                "grok":int(self.grok), "comprehension":int(self.comprehension), "memorization":int(self.memorization), "confusion":int(self.confusion),
-                "pre_comprehension_epoch":self.pre_comp_epoch, "pre_memorization_epoch":self.pre_memo_epoch,
-                "comprehension_epoch":self.comp_epoch, "memorization_epoch":self.memo_epoch,
+                "grok":int(self.grok), "comprehension":int(self.comprehension), 
+                "memorization":int(self.memorization), "confusion":int(self.confusion),
+                "pre_comp_epoch":self.pre_comp_epoch, "pre_memo_epoch":self.pre_memo_epoch,
+                "comp_epoch":self.comp_epoch, "memo_epoch":self.memo_epoch,
             }
         else :
             for k, v in states.items() :
-                assert k in states
+                assert k in self.states
                 setattr(self, k, v)
             self.set_states()
 
