@@ -85,13 +85,6 @@ class TrainableTransformer(LightningModule):
         self.es_step = 0
         self.reached_limit = False
 
-    def set_states(self):
-        self.states = {
-            "grok":int(self.grok), "comprehension":int(self.comprehension), "memorization":int(self.memorization), "confusion":int(self.confusion),
-            "pre_comprehension_epoch":self.pre_comp_epoch, "pre_memorization_epoch":self.pre_memo_epoch,
-            "comprehension_epoch":self.comp_epoch, "memorization_epoch":self.memo_epoch,
-        }
-
     def _scheduler_lr(self, step: int) -> float:
         """
         Used by pytorch_lighting
@@ -456,6 +449,24 @@ class TrainableTransformer(LightningModule):
         if self.reached_limit : self.es_step+=1
         return self.es_step
 
+    def set_states(self, states : dict = None):
+        if states is None :
+            self.states = {
+                "grok":int(self.grok), "comprehension":int(self.comprehension), "memorization":int(self.memorization), "confusion":int(self.confusion),
+                "pre_comprehension_epoch":self.pre_comp_epoch, "pre_memorization_epoch":self.pre_memo_epoch,
+                "comprehension_epoch":self.comp_epoch, "memorization_epoch":self.memo_epoch,
+            }
+        else :
+            for k, v in states.items() :
+                assert k in states
+                setattr(self, k, v)
+            self.set_states()
+
+    def is_grok(self, delay : int) :
+        diff_epoch = self.comp_epoch - self.memo_epoch
+        if not math.isnan(diff_epoch) : return diff_epoch >= delay
+        return False
+
     def training_epoch_end(self, outputs):
         """
         Used by pytorch_lightning
@@ -517,7 +528,6 @@ class TrainableTransformer(LightningModule):
 
             for k, v in logs.items():
                 self.log(k, v, prog_bar="loss" in k or "accuracy" in k)
-
 
             if self.hparams.use_wandb:
                 db_data = {"epoch": self.current_epoch, "train loss": loss.detach(), "train accuracy": accuracy, 'lr': first_lr}
@@ -583,10 +593,8 @@ class TrainableTransformer(LightningModule):
             self.memorization = (not self.comprehension) and self.memorization
             self.confusion = (not self.comprehension) and (not self.memorization)
 
-            # diff_epoch = self.comp_epoch - self.memo_epoch
-            # if not math.isnan(diff_epoch) : 
-            #     self.grok = diff_epoch >= 100
-            #     self.comprehension = not self.grok
+            #self.grok = self.is_grok(delay = 100)
+            #self.comprehension = not self.grok
 
             self.set_states()
             torch.save(self.states, self.hparams.logdir + "/states.pt")
@@ -664,11 +672,8 @@ class TrainableTransformer(LightningModule):
         self.send_dict_to_wandb(db_data, label = "data_info", title="Dataset Informations")
 
     def on_train_end(self) :
-
-        # diff_epoch = self.comp_epoch - self.memo_epoch
-        # if not math.isnan(diff_epoch) : 
-        #     self.grok = diff_epoch >= 100
-        #     self.comprehension = not self.grok
+        # self.grok = self.is_grok(delay = 100)
+        # self.comprehension = not self.grok
 
         self.set_states()
         print("="*10)
