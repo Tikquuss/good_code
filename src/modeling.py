@@ -4,6 +4,7 @@ from argparse import Namespace
 from typing import Any, Dict, List, Optional, Tuple, Union
 import time
 import numpy as np
+import math
 
 import torch
 import torch.nn.functional as F
@@ -61,17 +62,15 @@ class TrainableTransformer(LightningModule):
         ####
         self.use_wandb = self.hparams.use_wandb
 
-        # Early stopping
-        self.is_grokking = False
-        self.early_stopping_step = 0
-
         # State
         self.grok = False
         self.comprehension = False
         self.memorization = False
         self.confusion = True
-        self.comp_epoch = float("inf")
-        self.memo_epoch = float("inf")
+        self.pre_comp_epoch = float("inf") # val_accuracy > 05.0%
+        self.pre_memo_epoch = float("inf") # train_accuracy > 05.0%
+        self.comp_epoch = float("inf") # val_accuracy > 99.0%
+        self.memo_epoch = float("inf") # train_accuracy > 99.0%
 
         # Early stopping grokking : Stop the training `patience` epochs after the `metric` has reached the value `metric_threshold`
         early_stopping_grokking = self.hparams.early_stopping_grokking
@@ -466,6 +465,13 @@ class TrainableTransformer(LightningModule):
                     result[f"{prefix}ID_value_layer_{l}_head_{h}"] = self.ID_function(data=values[l][h].view(batch_size, -1), **self.hparams.ID_params)            
         return result
 
+    def increase_es_limit(self, logs):
+        es_metric = logs[self.es_metric]
+        self.reached_limit = self.reached_limit or (es_metric >= self.es_metric_threshold if self.es_mode == "max" 
+                                                    else es_metric <= self.es_metric_threshold)
+        if self.reached_limit : self.es_step+=1
+        return self.es_step
+
     def training_epoch_end(self, outputs):
         """
         Used by pytorch_lightning
@@ -479,12 +485,7 @@ class TrainableTransformer(LightningModule):
         epoch_is_to_be_logged = True
         if epoch_is_to_be_logged:   
             with torch.no_grad():
-                try:
-                    loss = torch.stack([x["partial_train_loss"] for x in outputs]).sum()
-                except Exception as e:
-                    print("!" * 80)
-                    print(outputs)
-                    raise e
+                loss = torch.stack([x["partial_train_loss"] for x in outputs]).sum()
                 perplexity = torch.exp(loss)
                 accuracy = torch.stack(
                     [x["partial_train_accuracy"] for x in outputs]
@@ -517,34 +518,27 @@ class TrainableTransformer(LightningModule):
                 "batches_per_epoch_train": self.hparams.data_module_params.batches_per_epoch_train,
                 "time_per_epoch": time.time() - self.training_epoch_start_time,
                 "fwd_time_in_epoch": self.fwd_time_in_epoch,
-
-                "early_stopping_step" : self.early_stopping_step
             }
             logs = {**id_output, **logs}
 
+            ##
+            if 'train' in self.es_metric : logs["e_step"] = self.increase_es_limit(logs)
+
+            if accuracy >= 5.0 : self.pre_memo_epoch = min(self.current_epoch, self.pre_memo_epoch)
+
+            memo_condition = accuracy >= 99.0
+            self.memorization = self.memorization or memo_condition
+            if memo_condition : self.memo_epoch = min(self.current_epoch, self.memo_epoch)
+            ##
+
             for k, v in logs.items():
                 self.log(k, v, prog_bar="loss" in k or "accuracy" in k)
-                
+
+
             if self.hparams.use_wandb:
                 db_data = {"epoch": self.current_epoch, "train loss": loss.detach(), "train accuracy": accuracy, 'lr': first_lr}
                 db_data = {**db_data, **id_output}
                 wandb.log(db_data)
-
-        # if self.current_epoch > 0 and self.hparams.save_checkpoint:
-        #     if self.current_epoch < 100 and self.current_epoch == int(2 ** (int(np.log(self.current_epoch) / np.log(2)))):
-        #         self.trainer.save_checkpoint(
-        #             os.path.join(
-        #                 self.hparams.checkpoint_path,
-        #                 "epoch_" + str(self.current_epoch) + ".ckpt",
-        #             )
-        #         )
-        #     elif self.current_epoch >= 100 and self.current_epoch % 50 == 0:
-        #         self.trainer.save_checkpoint(
-        #             os.path.join(
-        #                 self.hparams.checkpoint_path,
-        #                 "epoch_" + str(self.current_epoch) + ".ckpt",
-        #             )
-        #         )
 
         if self.hparams.data_module_params.data_flag and self.current_epoch % 1 == 0:
             self.trainer.save_checkpoint(
@@ -585,32 +579,43 @@ class TrainableTransformer(LightningModule):
                 # TOCHANGE
                 id_output[f"ID_last_layer_weights_val"] = self.ID_function(data=self.transformer.linear.weight, **self.hparams.ID_params)
             
-            self.is_grokking = self.is_grokking or accuracy >= self.hparams.early_stopping_step_val_acc_threshold
-            if self.is_grokking : self.early_stopping_step+=1
-
             logs = {
                 "val_loss": loss,
                 "val_accuracy": accuracy,
-                "val_perplexity": perplexity,
-                "early_stopping_step" : self.early_stopping_step
+                "val_perplexity": perplexity
             }
             logs = {**id_output, **logs}
 
-            # train accuracy
-            # device = self.transformer.embedding.weight.device
-            # train_data = self.train_dataset.data.to(device)
-            # training_data = {"text": train_data[:, :-1], "target": train_data[:, 1:]}
-            # with torch.no_grad():
-            #     tr_loss, tr_acc, *_ = self._step(training_data, 0, False)
-            #     logs["full_train_loss"] = tr_loss
-            #     logs["full_train_acc"] = tr_acc
+            ##
+            if 'val' in self.es_metric : logs["e_step"] = self.increase_es_limit(logs)
+
+            if accuracy >= 5.0 : self.pre_comp_epoch = min(self.current_epoch, self.pre_comp_epoch)
+
+            comp_condition = accuracy >= 99.0
+            self.comprehension = self.comprehension or comp_condition
+            if comp_condition : self.comp_epoch = min(self.current_epoch, self.comp_epoch)
+            
+            self.grok = self.comprehension and True # and long step of training
+            self.memorization = (not self.comprehension) and self.memorization
+            self.confusion = (not self.comprehension) and (not self.memorization)
+
+            # diff_epoch = self.comp_epoch - self.memo_epoch
+            # if not math.isnan(diff_epoch) : 
+            #     self.grok = diff_epoch >= 100
+            #     self.comprehension = not self.grok
+
+            self.states = {
+                "grok":self.grok, "comprehension":self.comprehension, "memorization": self.memorization, "confusion":self.confusion,
+                "pre_comprehension_epoch":self.pre_comp_epoch, "pre_memorization_epoch":self.pre_memo_epoch,
+                "comprehension_epoch":self.comp_epoch, "memorization_epoch":self.memo_epoch,
+            }
+            ##
 
             for k, v in logs.items():
                 self.log(k, v, prog_bar="loss" in k or "accuracy" in k)
-                
+
             if self.hparams.use_wandb:
                 db_data = {"epoch": self.current_epoch, "val loss": loss.detach(), "val accuracy": accuracy,
-                           #"full train acc": tr_acc, "full train loss": tr_loss, 
                            "early_stopping_step" : self.early_stopping_step}
                 db_data = {**db_data, **id_output}
                 wandb.log(db_data)
@@ -648,6 +653,14 @@ class TrainableTransformer(LightningModule):
 
         return logs
 
+    def send_dict_to_wandb(self, data, label, title) :
+        if self.hparams.use_wandb:  
+            labels = data.keys()
+            values = data.values()
+            data = [[label, val] for (label, val) in zip(labels, values)]
+            table = wandb.Table(data=data, columns = ["label", "value"])
+            wandb.log({label : wandb.plot.bar(table, "label", "value", title=title)})
+
     def on_train_start(self):
         self.trainer.save_checkpoint(
             os.path.join(
@@ -655,37 +668,33 @@ class TrainableTransformer(LightningModule):
                 "init.ckpt",
             )
         )
-        
-        if self.hparams.use_wandb:
-            db_data = {
-                "base_length" : self.hparams.data_module_params.base_length,
 
-                "train_batchsize" : self.hparams.data_module_params.train_batchsize,
-                "batches_per_epoch_train" : self.hparams.data_module_params.batches_per_epoch_train,
-                "len_train_data": self.hparams.data_module_params.train_data_size,
+        db_data = {
+            "base_length" : self.hparams.data_module_params.base_length,
+
+            "train_batchsize" : self.hparams.data_module_params.train_batchsize,
+            "batches_per_epoch_train" : self.hparams.data_module_params.batches_per_epoch_train,
+            "len_train_data": self.hparams.data_module_params.train_data_size,
                 
-                "val_batchsize" : self.hparams.data_module_params.val_batchsize,
-                "batches_per_epoch_val" : self.hparams.data_module_params.batches_per_epoch_val,
-                "len_val_data": self.hparams.data_module_params.val_data_size,
-
-                #"test_batchsize" : self.hparams.data_module_params.test_batchsize,
-                #"batches_per_epoch_test" : self.hparams.data_module_params.batches_per_epoch_test,
-                #"len_test_data": None,
-            }   
-            #wandb.log(db_data)
-
-            # fig, ax = plt.subplots(figsize=(4*4,1*4))
-            # #x = db_data.keys()
-            # x = [f'{k}={v}' for k, v in db_data.items() ]
-            # y = db_data.values()
-            # ax.bar(x, y)
-            # wandb.log({"data_info": fig})
-
-            labels = db_data.keys()
-            values = db_data.values()
-            data = [[label, val] for (label, val) in zip(labels, values)]
-            table = wandb.Table(data=data, columns = ["label", "value"])
-            wandb.log({"data_info" : wandb.plot.bar(table, "label", "value", title="Dataset Informations")})
+            "val_batchsize" : self.hparams.data_module_params.val_batchsize,
+            "batches_per_epoch_val" : self.hparams.data_module_params.batches_per_epoch_val,
+            "len_val_data": self.hparams.data_module_params.val_data_size,
+        }   
+        self.send_dict_to_wandb(db_data, label = "data_info", title="Dataset Informations")
 
     def on_train_end(self) :
-        pass
+
+        # diff_epoch = self.comp_epoch - self.memo_epoch
+        # if not math.isnan(diff_epoch) : 
+        #     self.grok = diff_epoch >= 100
+        #     self.comprehension = not self.grok
+
+        states = {
+            "grok":int(self.grok), "comprehension":int(self.comprehension), "memorization":int(self.memorization), "confusion":int(self.confusion),
+            "pre_comprehension_epoch":self.pre_comp_epoch, "pre_memorization_epoch":self.pre_memo_epoch,
+            "comprehension_epoch":self.comp_epoch, "memorization_epoch":self.memo_epoch,
+        }
+        print("="*10)
+        print(states)
+        print("="*10)
+        self.send_dict_to_wandb(states, label = "states_info", title="Phase Informations")

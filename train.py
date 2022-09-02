@@ -20,15 +20,7 @@ def get_parser():
     parser = ArgumentParser(description="")
 
     # Main parameters
-    parser.add_argument("--validation_metric", type=str, default="val_accuracy", help="Validation metrics : val_accuracy, val_loss ...")
-
-    # Devices & Seed
-    parser.add_argument("--accelerator", type=str, default="auto", help="accelerator types : cpu, gpu, tpu, ipu, auto") 
-    parser.add_argument("--devices", type=intorstr, default="auto", help="number of cpu processes, of gpu/tpu cores ...")
-    parser.add_argument("--random_seed", type=int, default=-1)
-
-    parser.add_argument("--max_epochs", type=int, default=None)
-    parser.add_argument("--max_steps", type=int, default=100000)
+    # ...
 
     # Dataset params
     parser.add_argument("--math_operator", type=str, default="+")
@@ -57,6 +49,9 @@ def get_parser():
     parser.add_argument("--max_context_len", type=int, default=50)
 
     # Training params
+    parser.add_argument("--max_epochs", type=int, default=None)
+    parser.add_argument("--max_steps", type=int, default=100000)
+    parser.add_argument("--validation_metric", type=str, default="val_accuracy", help="Validation metrics : val_accuracy, val_loss ...")
     parser.add_argument("--save_activations", type=bool_flag, default=True)
     parser.add_argument("--save_outputs", type=bool_flag, default=False)
     parser.add_argument(
@@ -78,32 +73,31 @@ def get_parser():
     parser.add_argument("--weight_decay_kind", type=str, default="to_zero")
     parser.add_argument("--noise_factor", type=float, default=0)
 
+    # Early_stopping (stop training after grokking)
+    parser.add_argument("--early_stopping_grokking", type=str2dic_all, default="", help="""
+        * eg. : "patience=int(1000),metric=str(val_accuracy),metric_threshold=float(90.0)"
+        * Stop the training `patience` epochs after the `metric` has reached the value `metric_threshold`"
+        """)
+
+    # Devices & Seed
+    parser.add_argument("--accelerator", type=str, default="auto", help="accelerator types : cpu, gpu, tpu, ipu, auto") 
+    parser.add_argument("--devices", type=intorstr, default="auto", help="number of cpu processes, of gpu/tpu cores ...")
+    parser.add_argument("--random_seed", type=int, default=-1)
+
     # wandb
     parser.add_argument("--use_wandb", type=bool_flag, default=False)
     parser.add_argument("--group_name", type=str, default="base")
     parser.add_argument("--wandb_entity", type=str, default=None, help="name of the team on wandb and is optional")
     parser.add_argument("--wandb_project", type=str, default=None, help="name of the project")
 
-    # Early stopping 
-    parser.add_argument("--early_stopping_patience", type=int, default=1e9)
-    parser.add_argument("--patience_metric", type=str, default="val_accuracy", 
-                help="train_loss, train_accuracy, val_loss, val_accuracy, ...")
-    parser.add_argument("--early_stopping_step_val_acc_threshold", type=float, default=90.0)
-
-    # Early_stopping (stop training after grokking)
-    parser.add_argument("--early_stopping_grokking", type=str2dic_all, default="", help="""
-        * eg. : "patience=int(1000),metric=str(val_accuracy),metric_threshold=float(90.0)"
-        * Stop the training `patience` epochs after the `metric` has reached the value `metric_threshold`"
-        """)
-    
     return parser
 
 class StopTrainingCallback(Callback):
     def on_validation_epoch_end(self, trainer, pl_module):
-        if pl_module.early_stopping_step >= pl_module.hparams.early_stopping_patience :
+        early_stopping_patience = pl_module.hparams.early_stopping_grokking.patience
+        if pl_module.es_step >= early_stopping_patience :
             #exit()
             raise KeyboardInterrupt
-
 
 class GenerateCallback(pl.Callback):
     """Use to plot the learned input embeddings at different training stages"""
@@ -215,10 +209,13 @@ def train(hparams: Namespace) -> None:
 
     callbacks = []
     if not data_flag :
-        patience_metric = hparams.patience_metric
+        #early_stopping_patience = hparams.early_stopping_patience
+        #patience_metric = hparams.patience_metric
+        early_stopping_patience = hparams.early_stopping_grokking.patience
+        patience_metric = hparams.early_stopping_grokking.metric
         mode = (lambda s : "min" if 'loss' in s else 'max')(patience_metric)
         early_stopping_callback = EarlyStopping(
-            monitor=patience_metric, patience=hparams.early_stopping_patience, verbose=False, strict=True,
+            monitor=patience_metric, patience=early_stopping_patience, verbose=False, strict=True,
             mode = mode
         )
 
@@ -238,7 +235,7 @@ def train(hparams: Namespace) -> None:
     
     callbacks += [
         #GenerateCallback(), 
-        #pl.callbacks.LearningRateMonitor("epoch");
+        pl.callbacks.LearningRateMonitor("epoch"),
         StopTrainingCallback()
     ]
 
@@ -246,14 +243,6 @@ def train(hparams: Namespace) -> None:
     
     trainer = Trainer(**trainer_args) #, progress_bar_refresh_rate=0
  
-    # #torch.save(model, os.path.join(checkpoint_path, "init.pt"))
-    # trainer.save_checkpoint(
-    #     os.path.join(
-    #         model.hparams.checkpoint_path ,
-    #         "init.ckpt",
-    #     )
-    # )
-
     hparams.eval_only = False
     if not hparams.eval_only :
         # Training
@@ -264,9 +253,8 @@ def train(hparams: Namespace) -> None:
         if not data_flag :
             print("Testing starts....")
             model.eval()
-            #r = trainer.test(model, datamodule=data_module)
-            r = trainer.validate(model, datamodule=data_module)
-            print(r)
+            #trainer.test(model, datamodule=data_module)
+            trainer.validate(model, datamodule=data_module)
             print("Testing completed.")
     else :
         hparams.eval_split = "validation"
@@ -278,9 +266,8 @@ def train(hparams: Namespace) -> None:
             elif hparams.eval_split == "validation" :
                 data_module.test_dataloader = data_module.val_dataloader
             model.eval()
-            #r = trainer.test(model, datamodule=data_module, ckpt_path=hparams.load_from_ckpt)
-            r = trainer.validate(model, datamodule=data_module, ckpt_path=hparams.load_from_ckpt)
-            print(r)
+            #trainer.test(model, datamodule=data_module, ckpt_path=hparams.load_from_ckpt)
+            trainer.validate(model, datamodule=data_module, ckpt_path=hparams.load_from_ckpt)
             print("Evaluation completed.")
 
     return hparams.logdir

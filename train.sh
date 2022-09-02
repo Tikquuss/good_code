@@ -14,7 +14,7 @@ max_lr=${6-0.001}
 random_seed=${7-0}
 
 max_steps=100000
-max_epochs=10000
+max_epochs=100000
 
 ### wandb ###
 # wandb_entity is the name of the team on wandb and is optional
@@ -31,10 +31,9 @@ dump_path=..
 logdir=${dump_path}/logs/$group_name
 datadir=${dump_path}/data/$group_name
 
-### Early_stopping ###
-early_stopping_patience=5000000
-patience_metric=val_accuracy
-early_stopping_step_val_acc_threshold=90.0
+### Early_stopping (for grokking) : Stop the training `patience` epochs after the `metric` has reached the value `metric_threshold` ###
+#early_stopping_grokking=$none
+early_stopping_grokking="patience=int(1000),metric=str(val_accuracy),metric_threshold=float(90.0)"
 
 ###
 python train.py \
@@ -68,11 +67,9 @@ python train.py \
 		--momentum 0.9 \
 		--random_seed $random_seed \
 		--max_steps $max_steps \
+		--max_epochs $max_epochs \
 		--accelerator auto \
 		--devices auto \
-		--early_stopping_patience $early_stopping_patience \
-		--patience_metric $patience_metric \
-		--early_stopping_step_val_acc_threshold $early_stopping_step_val_acc_threshold \
-		--max_epochs $max_epochs \
+		--early_stopping_grokking $early_stopping_grokking \
 #		--load_from_ckpt None \
 #		--operand_length \
