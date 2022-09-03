@@ -105,7 +105,7 @@ def crunch_hessian_eigs(surf_file, net, w, s, d, dataloader, comm, rank, args, e
             rank, count + 1, len(inds), 100.0 * (count + 1)/len(inds), ind, str(coord), \
             maxeig, mineig, iter_count, compute_time, sync_time))
 
-        if count%20 == 0 : 
+        if count%10 == 0 : 
             #os.system('cls')
             clear_output(wait=True)
 
@@ -114,6 +114,79 @@ def crunch_hessian_eigs(surf_file, net, w, s, d, dataloader, comm, rank, args, e
     for i in range(max(inds_nums) - len(inds)):
         max_eig = reduce_max(comm, max_eig)
         min_eig = reduce_min(comm, min_eig)
+
+    total_time = time.time() - start_time
+    print('Rank %d done! Total time: %f Sync: %f '%(rank, total_time, total_sync))
+    f.close()
+
+
+def crunch_hessian_eigs_2(surf_file, net, w, s, d, dataloader, comm, rank, args, evaluator):
+    """
+        Calculate eigen values of the hessian matrix of a given model in parallel
+        using mpi reduce. This is the synchronized version.
+    """
+    f = h5py.File(surf_file, 'r+' if rank == 0 else 'r')
+    min_eig, max_eig = [], []
+    xcoordinates = f['xcoordinates'][:]
+    ycoordinates = f['ycoordinates'][:] if 'ycoordinates' in f.keys() else None
+
+    if 'min_eig' not in f.keys():
+        shape = xcoordinates.shape if ycoordinates is None else (len(xcoordinates),len(ycoordinates))
+        max_eig = -np.ones(shape=shape)
+        min_eig = np.ones(shape=shape)
+        if rank == 0:
+            f['min_eig'] = min_eig
+            f['max_eig'] = max_eig
+    else:
+        min_eig = f['min_eig'][:]
+        max_eig = f['max_eig'][:]
+
+    if ycoordinates is None : coords = xcoordinates
+    else : coords = np.array(np.meshgrid(xcoordinates, ycoordinates)).T.reshape(-1,2) # (N*N,2)
+    inds = np.array(range(max_eig.size))
+
+    # Loop over all un-calculated coords
+    start_time = time.time()
+    total_sync = 0.0
+
+    for count, ind in enumerate(inds):
+         # Get the coordinates of the points being calculated
+        coord = coords[count]
+
+        # Load the weights corresponding to those coordinates into the net
+        if args.dir_type == 'weights':
+            set_weights(net.module if args.ngpu > 1 else net, w, d, coord)
+        elif args.dir_type == 'states':
+            set_states(net.module if args.ngpu > 1 else net, s, d, coord)
+
+        # Compute the eign values of the hessian matrix
+        compute_start = time.time()
+        maxeig, mineig, iter_count = min_max_hessian_eigs(net, dataloader, evaluator, rank=rank, 
+                                                          use_cuda=args.cuda, verbose=True)
+        compute_time = time.time() - compute_start
+
+        # Record the result in the local array
+        max_eig.ravel()[ind] = maxeig
+        min_eig.ravel()[ind] = mineig
+
+
+        # Send updated plot data to the master node
+        sync_start_time = time.time()
+        ###
+        ###
+        sync_time = time.time() - sync_start_time
+        total_sync += sync_time
+
+        print("%d/%d  (%0.2f%%)  %d\t  %s \tmaxeig:%8.5f \tmineig:%8.5f \titer: %d \ttime:%.2f \tsync:%.2f" % ( \
+            count + 1, len(inds), 100.0 * (count + 1)/len(inds), ind, str(coord), \
+            maxeig, mineig, iter_count, compute_time, sync_time))
+
+        if count%10 == 0 : 
+            #os.system('cls')
+            clear_output(wait=True)
+
+    f['max_eig'][:] = max_eig
+    f['min_eig'][:] = min_eig
 
     total_time = time.time() - start_time
     print('Rank %d done! Total time: %f Sync: %f '%(rank, total_time, total_sync))

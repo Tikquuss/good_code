@@ -141,10 +141,10 @@ def crunch(surf_file, net, w, s, d, dataloader, loss_key, acc_key, comm, rank, a
             f.flush()
 
         print('Evaluating rank %d  %d/%d  (%.1f%%)  coord=%s \t%s= %.3f \t%s=%.2f \ttime=%.2f \tsync=%.2f' % (
-                rank, count, len(inds), 100.0 * count/len(inds), str(coord), loss_key, loss,
+                rank, count+1, len(inds), 100.0 * count/len(inds), str(coord), loss_key, loss,
                 acc_key, acc, loss_compute_time, syc_time))
         
-        if count%2 == 0 : 
+        if count%10 == 0 : 
             #os.system('cls')
             clear_output(wait=True)
 
@@ -156,6 +156,80 @@ def crunch(surf_file, net, w, s, d, dataloader, loss_key, acc_key, comm, rank, a
 
     total_time = time.time() - start_time
     print('Rank %d done!  Total time: %.2f Sync: %.2f' % (rank, total_time, total_sync))
+
+    f.close()
+
+
+def crunch_2(surf_file, net, w, s, d, dataloader, loss_key, acc_key, comm, rank, args, evaluator):
+    """
+        Calculate the loss values and/or accuracies of modified models
+    """
+
+    f = h5py.File(surf_file, 'r+' if rank == 0 else 'r')
+    losses, accuracies = [], []
+    xcoordinates = f['xcoordinates'][:]
+    ycoordinates = f['ycoordinates'][:] if 'ycoordinates' in f.keys() else None
+
+    if loss_key not in f.keys():
+        shape = xcoordinates.shape if ycoordinates is None else (len(xcoordinates),len(ycoordinates))
+        losses = -np.ones(shape=shape)
+        accuracies = -np.ones(shape=shape)
+        f[loss_key] = losses
+        f[acc_key] = accuracies
+    else:
+        losses = f[loss_key][:]
+        accuracies = f[acc_key][:]
+    
+    if ycoordinates is None : coords = xcoordinates
+    else : coords = np.array(np.meshgrid(xcoordinates, ycoordinates)).T.reshape(-1,2) # (N*N,2)
+    inds = np.array(range(losses.size))
+
+    start_time = time.time()
+    total_sync = 0.0
+
+    # Loop over all uncalculated loss values
+    for count, ind in enumerate(inds):
+        # Get the coordinates of the loss value being calculated
+        coord = coords[count]
+
+        # Load the weights corresponding to those coordinates into the net
+        if args.dir_type == 'weights': 
+            set_weights(net.module if args.ngpu > 1 else net, w, d, coord)
+        elif args.dir_type == 'states':
+            set_states(net.module if args.ngpu > 1 else net, s, d, coord)
+
+        # Record the time to compute the loss value
+        loss_start = time.time()
+        loss, acc = evaluator(net, dataloader)
+        loss_compute_time = time.time() - loss_start
+
+        # Record the result in the local array
+        losses.ravel()[ind] = loss
+        accuracies.ravel()[ind] = acc
+
+        # Send updated plot data to the master node
+        syc_start = time.time()
+
+        ###
+        ###
+
+        syc_time = time.time() - syc_start
+        total_sync += syc_time
+
+        print('Evaluating %d/%d  (%.1f%%)  coord=%s \t%s= %.3f \t%s=%.2f \ttime=%.2f \tsync=%.2f' % (
+                count+1, len(inds), 100.0 * count/len(inds), str(coord), loss_key, loss,
+                acc_key, acc, loss_compute_time, syc_time))
+        
+        if count%10 == 0 : 
+            #os.system('cls')
+            clear_output(wait=True)
+
+    f[loss_key][:] = losses
+    f[acc_key][:] = accuracies
+    f.flush()
+
+    total_time = time.time() - start_time
+    print('Done!  Total time: %.2f Sync: %.2f' % (total_time, total_sync))
 
     f.close()
 
@@ -233,8 +307,12 @@ def plot_surface(args, lightning_module_class, dataloader, metrics) :
     # Start the computation
     #--------------------------------------------------------------------------
     evaluator = Evaluator(metrics = metrics)
-    crunch(surf_file, net, w, s, d, dataloader , 'train_loss', 'train_acc', comm, rank, args, evaluator)
-    # crunch(surf_file, net, w, s, d, dataloader, 'test_loss', 'test_acc', comm, rank, args, evaluator)
+
+    if args.mpi: crunch_function = crunch
+    else : crunch_function = crunch_2 
+
+    crunch_function(surf_file, net, w, s, d, dataloader , 'train_loss', 'train_acc', comm, rank, args, evaluator)
+    #crunch_function(surf_file, net, w, s, d, dataloader, 'test_loss', 'test_acc', comm, rank, args, evaluator)
 
     #--------------------------------------------------------------------------
     # Plot figures

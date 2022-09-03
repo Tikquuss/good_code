@@ -481,11 +481,12 @@ class TrainableTransformer(LightningModule):
         epoch_is_to_be_logged = True
         if epoch_is_to_be_logged:   
             with torch.no_grad():
-                loss = torch.stack([x["partial_train_loss"] for x in outputs]).sum()
-                perplexity = torch.exp(loss)
+                loss = torch.stack([x["partial_train_loss"] for x in outputs])
+                perplexity = torch.exp(loss.sum())
+                loss = loss.mean()
                 accuracy = torch.stack(
                     [x["partial_train_accuracy"] for x in outputs]
-                ).sum()
+                ).mean()
             # avg_lr = torch.stack([x["learning_rate"] for x in outputs]).mean()
             # max_lr = torch.stack([x["learning_rate"] for x in outputs]).max()
             # last_lr = outputs[-1]["learning_rate"]
@@ -557,9 +558,10 @@ class TrainableTransformer(LightningModule):
 
         if validation_is_real:
 
-            loss = torch.stack([x["partial_val_loss"] for x in outputs]).sum()
-            perplexity = torch.exp(loss)
-            accuracy = torch.stack([x["partial_val_accuracy"] for x in outputs]).sum()
+            loss = torch.stack([x["partial_val_loss"] for x in outputs])
+            perplexity = torch.exp(loss.sum())
+            loss = loss.mean()
+            accuracy = torch.stack([x["partial_val_accuracy"] for x in outputs]).mean()
 
             attentions, values = None, None
             if self.hparams.save_activations or self.hparams.save_outputs or self.hparams.save_checkpoint:
