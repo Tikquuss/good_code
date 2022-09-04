@@ -61,6 +61,7 @@ def get_parser():
     )
     parser.add_argument("--save_checkpoint", type=bool_flag, default=True)     
     parser.add_argument("--load_from_ckpt", type=str, default=None)
+    parser.add_argument("--eval_only", type=bool_flag, default=False) 
 
     # Optimizer
     parser.add_argument("--opt", type=str, default="adamw", choices=("sgd", "adamw"))
@@ -243,7 +244,6 @@ def train(hparams: Namespace) -> None:
     
     trainer = Trainer(**trainer_args) #, progress_bar_refresh_rate=0
  
-    hparams.eval_only = False
     if not hparams.eval_only :
         # Training
         print("Training starts...")
@@ -262,12 +262,15 @@ def train(hparams: Namespace) -> None:
             # Evaluation
             print("Evaluation starts....")
             if hparams.eval_split == "train":
-                data_module.test_dataloader = data_module.train_dataloader
+                #data_module.test_dataloader = data_module.train_dataloader
+                data_module.val_dataloader = data_module.train_dataloader
             elif hparams.eval_split == "validation" :
-                data_module.test_dataloader = data_module.val_dataloader
+                #data_module.test_dataloader = data_module.val_dataloader
+                pass
             model.eval()
             #trainer.test(model, datamodule=data_module, ckpt_path=hparams.load_from_ckpt)
-            trainer.validate(model, datamodule=data_module, ckpt_path=hparams.load_from_ckpt)
+            #trainer.validate(model, datamodule=data_module, ckpt_path=hparams.load_from_ckpt)
+            trainer.validate(model, data_module.val_dataloader(), ckpt_path=hparams.load_from_ckpt)
             print("Evaluation completed.")
 
     return hparams.logdir

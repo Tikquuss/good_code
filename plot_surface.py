@@ -42,6 +42,7 @@ if __name__ == '__main__':
     # plot parameters
     parser.add_argument('--proj_file', default='', help='the .h5 file contains projected optimization trajectory.')
     parser.add_argument('--loss_max', default=5, type=float, help='Maximum value to show in 1D plot')
+    parser.add_argument('--acc_max', default=100, type=float, help='ymax value (accuracy)')
     parser.add_argument('--vmax', default=10, type=float, help='Maximum value to map')
     parser.add_argument('--vmin', default=0.1, type=float, help='Miminum value to map')
     parser.add_argument('--vlevel', default=0.5, type=float, help='plot contours every vlevel')
@@ -51,7 +52,8 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    args.model_file = "/content/logs/tdp=90-wd=1-d=0.0-opt=adamw-mlr=0.001-mo+/checkpoints/epoch=0-val_accuracy=0.0000.ckpt"
+    
+    #args.model_file = "/content/logs/tdp=90-wd=1-d=0.0-opt=adamw-mlr=0.001-mo+/checkpoints/epoch=0-val_accuracy=0.0000.ckpt"
 
     lightning_module_class = TrainableTransformer
 

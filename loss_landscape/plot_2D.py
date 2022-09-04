@@ -102,6 +102,7 @@ def plot_trajectory(proj_file, dir_file, show=False):
         f2.close()
 
     fig.savefig(proj_file + '.pdf', dpi=300, bbox_inches='tight', format='pdf')
+    fig.savefig(proj_file + '.png', dpi=300, bbox_inches='tight')
     if show: plt.show()
 
 
@@ -125,7 +126,7 @@ def plot_contour_trajectory(surf_file, dir_file, proj_file, surf_name='loss_vals
 
     # plot trajectories
     pf = h5py.File(proj_file, 'r')
-    plt.plot(pf['proj_xcoord'], pf['proj_ycoord'], marker='.')
+    plt.plot(pf['proj_xcoord'][:], pf['proj_ycoord'][:], marker='.')
 
     # plot red points when learning rate decays
     # for e in [150, 225, 275]:
@@ -140,8 +141,9 @@ def plot_contour_trajectory(surf_file, dir_file, proj_file, surf_name='loss_vals
     df.close()
     plt.clabel(CS1, inline=1, fontsize=6)
     plt.clabel(CS2, inline=1, fontsize=6)
-    fig.savefig(proj_file + '_' + surf_name + '_2dcontour_proj.pdf', dpi=300,
-                bbox_inches='tight', format='pdf')
+    filename = proj_file + '_' + surf_name + '_2dcontour_proj'
+    fig.savefig(filename + '.pdf', dpi=300, bbox_inches='tight', format='pdf')
+    fig.savefig(filename + '.png', dpi=300, bbox_inches='tight')
     pf.close()
     if show: plt.show()
 
@@ -169,8 +171,9 @@ def plot_2d_eig_ratio(surf_file, val_1='min_eig', val_2='max_eig', show=False):
     sns_plot = sns.heatmap(abs_ratio, cmap='viridis', vmin=0, vmax=.5, cbar=True,
                            xticklabels=False, yticklabels=False)
     sns_plot.invert_yaxis()
-    sns_plot.get_figure().savefig(surf_file + '_' + val_1 + '_' + val_2 + '_abs_ratio_heat_sns.pdf',
-                                  dpi=300, bbox_inches='tight', format='pdf')
+    filename = surf_file + '_' + val_1 + '_' + val_2 + '_abs_ratio_heat_sns'
+    sns_plot.get_figure().savefig(filename + '.pdf', dpi=300, bbox_inches='tight', format='pdf')
+    sns_plot.get_figure().savefig(filename + '.png', dpi=300, bbox_inches='tight')
 
     # Plot 2D heatmaps with color bar using seaborn
     ratio = np.divide(Z1, Z2)
@@ -178,8 +181,9 @@ def plot_2d_eig_ratio(surf_file, val_1='min_eig', val_2='max_eig', show=False):
     fig = plt.figure()
     sns_plot = sns.heatmap(ratio, cmap='viridis', cbar=True, xticklabels=False, yticklabels=False)
     sns_plot.invert_yaxis()
-    sns_plot.get_figure().savefig(surf_file + '_' + val_1 + '_' + val_2 + '_ratio_heat_sns.pdf',
-                                  dpi=300, bbox_inches='tight', format='pdf')
+    filename = surf_file + '_' + val_1 + '_' + val_2 + '_ratio_heat_sns'
+    sns_plot.get_figure().savefig(filename + '.pdf', dpi=300, bbox_inches='tight', format='pdf')
+    sns_plot.get_figure().savefig(filename + '.png', dpi=300, bbox_inches='tight')
     f.close()
     if show: plt.show()
 

@@ -71,5 +71,6 @@ python train.py \
 		--accelerator auto \
 		--devices auto \
 		--early_stopping_grokking $early_stopping_grokking \
+		--eval_only False \
 #		--load_from_ckpt None \
 #		--operand_length \

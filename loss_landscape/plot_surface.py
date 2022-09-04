@@ -323,7 +323,7 @@ def plot_surface(args, lightning_module_class, dataloader, metrics) :
         elif args.y:
             plot_2d_contour(surf_file, 'train_loss', args.vmin, args.vmax, args.vlevel, args.show)
         else:
-            plot_1d_loss_err(surf_file, args.xmin, args.xmax, args.loss_max, args.log, args.show)
+            plot_1d_loss_err(surf_file, args.xmin, args.xmax, args.loss_max, args.acc_max, args.log, args.show)
 
     
     return dir_file, surf_file

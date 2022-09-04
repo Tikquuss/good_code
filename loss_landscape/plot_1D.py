@@ -7,7 +7,7 @@ import h5py
 import argparse
 import numpy as np
 
-def plot_1d_loss_err(surf_file, xmin=-1.0, xmax=1.0, loss_max=5, log=False, show=False):
+def plot_1d_loss_err(surf_file, xmin=-1.0, xmax=1.0, loss_max=5, acc_max = 100, log=False, show=False):
     print('------------------------------------------------------------------')
     print('plot_1d_loss_err')
     print('------------------------------------------------------------------')
@@ -52,13 +52,13 @@ def plot_1d_loss_err(surf_file, xmin=-1.0, xmax=1.0, loss_max=5, log=False, show
     ax1.set_ylim(0, loss_max)
     ax2.set_ylabel('Accuracy', color='r', fontsize='xx-large')
     ax2.tick_params('y', colors='r', labelsize='x-large')
-    ax2.set_ylim(0, 100)
-    pp.savefig(surf_file + '_1d_loss_acc' + ('_log' if log else '') + '.pdf',
-                dpi=300, bbox_inches='tight', format='pdf')
-
+    ax2.set_ylim(0, acc_max)
+    filename = surf_file + '_1d_loss_acc' + ('_log' if log else '')
+    pp.savefig(f"{filename}.pdf", dpi=300, bbox_inches='tight', format='pdf')
+    fig.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
 
     # train_loss curve
-    pp.figure()
+    fig = pp.figure()
     if log:
         pp.semilogy(x, train_loss)
     else:
@@ -66,23 +66,27 @@ def plot_1d_loss_err(surf_file, xmin=-1.0, xmax=1.0, loss_max=5, log=False, show
     pp.ylabel('Training Loss', fontsize='xx-large')
     pp.xlim(xmin, xmax)
     pp.ylim(0, loss_max)
-    pp.savefig(surf_file + '_1d_train_loss' + ('_log' if log else '') + '.pdf',
+    filename = surf_file + '_1d_train_loss' + ('_log' if log else '')
+    pp.savefig(filename + '.pdf',
                 dpi=300, bbox_inches='tight', format='pdf')
+    fig.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
 
     # train_err curve
-    pp.figure()
-    pp.plot(x, 100 - train_acc)
+    fig = pp.figure()
+    pp.plot(x, acc_max - train_acc)
     pp.xlim(xmin, xmax)
-    pp.ylim(0, 100)
+    pp.ylim(0, acc_max)
     pp.ylabel('Training Error', fontsize='xx-large')
-    pp.savefig(surf_file + '_1d_train_err.pdf', dpi=300, bbox_inches='tight', format='pdf')
+    filename = surf_file + '_1d_train_err'
+    pp.savefig(filename + '.pdf', dpi=300, bbox_inches='tight', format='pdf')
+    fig.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
 
     if show: pp.show()
     f.close()
 
 
 def plot_1d_loss_err_repeat(prefix, idx_min=1, idx_max=10, xmin=-1.0, xmax=1.0,
-                            loss_max=5, show=False):
+                            loss_max=5, acc_max = 100, show=False):
     """
         Plotting multiple 1D loss surface with different directions in one figure.
     """
@@ -115,8 +119,10 @@ def plot_1d_loss_err_repeat(prefix, idx_min=1, idx_max=10, xmin=-1.0, xmax=1.0,
     ax1.set_ylim(0, loss_max)
     ax2.set_ylabel('Accuracy', color='r', fontsize='xx-large')
     ax2.tick_params('y', colors='r', labelsize='x-large')
-    ax2.set_ylim(0, 100)
-    pp.savefig(prefix + '_1d_loss_err_repeat.pdf', dpi=300, bbox_inches='tight', format='pdf')
+    ax2.set_ylim(0, acc_max)
+    filename = prefix + '_1d_loss_err_repeat'
+    pp.savefig(filename + '.pdf', dpi=300, bbox_inches='tight', format='pdf')
+    fig.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
 
     if show: pp.show()
 
@@ -136,13 +142,17 @@ def plot_1d_eig_ratio(surf_file, xmin=-1.0, xmax=1.0, val_1='min_eig', val_2='ma
     pp.plot(x, abs_ratio)
     pp.xlim(xmin, xmax)
     pp.ylim(0, ymax)
-    pp.savefig(surf_file + '_1d_eig_abs_ratio.pdf', dpi=300, bbox_inches='tight', format='pdf')
+    filename = surf_file + '_1d_eig_abs_ratio'
+    pp.savefig(filename + '.pdf', dpi=300, bbox_inches='tight', format='pdf')
+    pp.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
 
     ratio = np.divide(Z1, Z2)
     pp.plot(x, ratio)
     pp.xlim(xmin, xmax)
     pp.ylim(0, ymax)
-    pp.savefig(surf_file + '_1d_eig_ratio.pdf', dpi=300, bbox_inches='tight', format='pdf')
+    filename = surf_file + '_1d_eig_ratio'
+    pp.savefig(filename + '.pdf', dpi=300, bbox_inches='tight', format='pdf')
+    pp.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
 
     f.close()
     if show: pp.show()
@@ -155,7 +165,8 @@ if __name__ == '__main__':
     parser.add_argument('--log', action='store_true', default=False, help='logarithm plot')
     parser.add_argument('--xmin', default=-1, type=float, help='xmin value')
     parser.add_argument('--xmax', default=1, type=float, help='xmax value')
-    parser.add_argument('--loss_max', default=5, type=float, help='ymax value')
+    parser.add_argument('--loss_max', default=5, type=float, help='ymax value (loss)')
+    parser.add_argument('--acc_max', default=100, type=float, help='ymax value (accuracy)')
     parser.add_argument('--show', action='store_true', default=False, help='show plots')
     parser.add_argument('--prefix', default='', help='The common prefix for surface files')
     parser.add_argument('--idx_min', default=1, type=int, help='min index for the surface file')
@@ -165,6 +176,6 @@ if __name__ == '__main__':
 
     if args.prefix:
         plot_1d_loss_err_repeat(args.prefix, args.idx_min, args.idx_max,
-                                args.xmin, args.xmax, args.loss_max, args.show)
+                                args.xmin, args.xmax, args.loss_max, args.acc_max, args.show)
     else:
-        plot_1d_loss_err(args.surf_file, args.xmin, args.xmax, args.loss_max, args.log, args.show)
+        plot_1d_loss_err(args.surf_file, args.xmin, args.xmax, args.loss_max, args.acc_max, args.log, args.show)

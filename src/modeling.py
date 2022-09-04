@@ -165,7 +165,7 @@ class TrainableTransformer(LightningModule):
         self,
         batch: Dict,
         batch_idx: int,
-        train: bool = True,
+        data_size: int,
         reduction: str = "mean",
         grads: bool = False,
     ) :
@@ -203,10 +203,7 @@ class TrainableTransformer(LightningModule):
         y_hat_rhs = y_hat[..., eq_position + 1 :]
         x_lhs = x[..., : eq_position + 1]
 
-        if train:
-            coeff = float(batch["target"].shape[0]) / self.hparams.data_module_params.train_data_size
-        else:
-            coeff = float(batch["target"].shape[0]) / self.hparams.data_module_params.val_data_size
+        coeff = float(batch["target"].shape[0]) / data_size
 
         loss = F.cross_entropy(y_hat_rhs, y_rhs, reduction=reduction)
 
@@ -243,8 +240,10 @@ class TrainableTransformer(LightningModule):
             self.fwd_time_in_epoch = 0
 
         start = time.time()
+        data_size = self.hparams.data_module_params.train_data_size
+        #data_size = len(self.trainer.train_dataloaders[0].dataset)
         loss, accuracy, coeff, x_lhs, y_hat_rhs, hidden_states, attentions, values = self._step(
-            batch=batch, batch_idx=batch_idx, train=True
+            batch=batch, batch_idx=batch_idx, data_size=data_size
         )
 
         self.fwd_time_in_epoch += time.time() - start
@@ -285,8 +284,10 @@ class TrainableTransformer(LightningModule):
                   attentions, and values
         """    
         with torch.no_grad():
+            #data_size = self.hparams.data_module_params.val_data_size
+            data_size = len(self.trainer.val_dataloaders[0].dataset)
             loss, accuracy, coeff, x_lhs, y_hat_rhs, hidden_states, attentions, values = self._step(
-                batch=batch, batch_idx=batch_idx, train=False
+                batch=batch, batch_idx=batch_idx, data_size=data_size
             )
         output = {
             "partial_val_loss": coeff * loss,
@@ -311,9 +312,10 @@ class TrainableTransformer(LightningModule):
         :returns: a dict with val_loss, val_accuracy, probabilities of solutions,
                   attentions, and values
         """
-
+        data_size = self.hparams.data_module_params.val_data_size
+        #data_size = len(self.trainer.val_dataloaders[0].dataset)
         loss, accuracy, coeff, x_lhs, y_hat_rhs, hidden_states, attentions, values = self._step(
-            batch=batch, batch_idx=batch_idx, train=False, reduction="none"
+            batch=batch, batch_idx=batch_idx, data_size=data_size, reduction="none"
         )
         output = {
             "partial_test_loss": coeff * loss,
