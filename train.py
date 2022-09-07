@@ -1,6 +1,8 @@
 import os
 from argparse import ArgumentParser, Namespace
 
+import wandb
+
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
@@ -90,7 +92,11 @@ def get_parser():
     parser.add_argument("--group_name", type=str, default="base")
     parser.add_argument("--wandb_entity", type=str, default=None, help="name of the team on wandb and is optional")
     parser.add_argument("--wandb_project", type=str, default=None, help="name of the project")
-    parser.add_argument("--watch", type=bool_flag, default=False, help="https://docs.wandb.ai/ref/python/watch")
+    parser.add_argument("--watch", type=str2dic_all, default="", help="""
+        https://docs.wandb.ai/ref/python/watch
+        eg. : log=str(all),log_freq=int(1),
+    
+    """)
 
     return parser
 
@@ -180,6 +186,16 @@ def train(hparams: Namespace) -> None:
 
     # Create the model
     model = TrainableTransformer(hparams).float()
+
+    # if hparams.watch:
+    #     wandb.watch(
+    #         model,
+    #         #criterion=None,
+    #         log = hparams.watch.log,
+    #         log_freq = hparams.watch.log_freq,
+    #         #idx = None,
+    #         #log_graph = False
+    #     )
 
     torch.save(data_module, hparams.logdir + "/data.pt")
     torch.save(hparams, hparams.logdir + "/hparams.pt")

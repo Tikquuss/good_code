@@ -680,10 +680,10 @@ class TrainableTransformer(LightningModule):
                 wandb.watch(
                     self.transformer,
                     #criterion=None,
-                    #log: Optional[str] = "gradients",
-                    #log_freq: int = 1000,
-                    #idx: Optional[int] = None,
-                    #log_graph: bool = (False)
+                    log = self.hparams.watch.log,
+                    log_freq = self.hparams.watch.log_freq,
+                    #idx: = None,
+                    #log_graph = False
                 )
 
     def on_train_end(self) :

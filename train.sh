@@ -1,5 +1,7 @@
 #!/bin/bash
 
+none="_None_"
+
 ### usage ###
 # . train.sh $train_data_pct $math_operator $weight_decay $dropout $opt $max_lr $random_seed $use_wandb $group_name
 # all this parameters are optional (see the default values below)
@@ -25,7 +27,9 @@ use_wandb=False
 group_name="tdp=${train_data_pct}-wd=${weight_decay}-d=${dropout}-opt=${opt}-mlr=${max_lr}-mo${math_operator}"
 wandb_entity="grokking_ppsp"
 wandb_project="grokking_operator=${math_operator}"
-watch=False
+
+watch=$none
+#watch="log=str(all),log_freq=int(1)"
 
 ### Experiment dump path ###
 dump_path=..
