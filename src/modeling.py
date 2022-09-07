@@ -610,7 +610,7 @@ class TrainableTransformer(LightningModule):
 
             if self.hparams.use_wandb:
                 db_data = {"epoch": self.current_epoch, "val loss": loss.detach(), "val accuracy": accuracy,
-                           "early_stopping_step" : self.early_stopping_step}
+                           "es_step" : self.es_step}
                 db_data = {**db_data, **id_output}
                 wandb.log(db_data)
   

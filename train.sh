@@ -25,7 +25,7 @@ use_wandb=False
 group_name="tdp=${train_data_pct}-wd=${weight_decay}-d=${dropout}-opt=${opt}-mlr=${max_lr}-mo${math_operator}"
 wandb_entity="grokking_ppsp"
 wandb_project="grokking_operator=${math_operator}"
-watch=True
+watch=False
 
 ### Experiment dump path ###
 dump_path=..

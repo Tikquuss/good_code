@@ -1,6 +1,8 @@
 import argparse
 import wandb
 
+wandb_id = None
+
 FALSY_STRINGS = {'off', 'false', '0'}
 TRUTHY_STRINGS = {'on', 'true', '1'}
 
