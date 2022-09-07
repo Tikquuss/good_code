@@ -25,6 +25,7 @@ use_wandb=False
 group_name="tdp=${train_data_pct}-wd=${weight_decay}-d=${dropout}-opt=${opt}-mlr=${max_lr}-mo${math_operator}"
 wandb_entity="grokking_ppsp"
 wandb_project="grokking_operator=${math_operator}"
+watch=True
 
 ### Experiment dump path ###
 dump_path=..
@@ -63,6 +64,7 @@ python train.py \
 		--group_name $group_name \
 		--wandb_entity $wandb_entity \
 		--wandb_project $wandb_project \
+		--watch $watch \
 		--opt $opt \
 		--momentum 0.9 \
 		--random_seed $random_seed \

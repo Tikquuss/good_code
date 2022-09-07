@@ -662,19 +662,29 @@ class TrainableTransformer(LightningModule):
                 "init.ckpt",
             )
         )
+        if self.hparams.use_wandb:
+            db_data = {
+                "base_length" : self.hparams.data_module_params.base_length,
 
-        db_data = {
-            "base_length" : self.hparams.data_module_params.base_length,
-
-            "train_batchsize" : self.hparams.data_module_params.train_batchsize,
-            "batches_per_epoch_train" : self.hparams.data_module_params.batches_per_epoch_train,
-            "len_train_data": self.hparams.data_module_params.train_data_size,
-                
-            "val_batchsize" : self.hparams.data_module_params.val_batchsize,
-            "batches_per_epoch_val" : self.hparams.data_module_params.batches_per_epoch_val,
-            "len_val_data": self.hparams.data_module_params.val_data_size,
-        }   
-        self.send_dict_to_wandb(db_data, label = "data_info", title="Dataset Informations")
+                "train_batchsize" : self.hparams.data_module_params.train_batchsize,
+                "batches_per_epoch_train" : self.hparams.data_module_params.batches_per_epoch_train,
+                "len_train_data": self.hparams.data_module_params.train_data_size,
+                    
+                "val_batchsize" : self.hparams.data_module_params.val_batchsize,
+                "batches_per_epoch_val" : self.hparams.data_module_params.batches_per_epoch_val,
+                "len_val_data": self.hparams.data_module_params.val_data_size,
+            }   
+            self.send_dict_to_wandb(db_data, label = "data_info", title="Dataset Informations")
+            
+            if self.hparams.watch:
+                wandb.watch(
+                    self.transformer,
+                    #criterion=None,
+                    #log: Optional[str] = "gradients",
+                    #log_freq: int = 1000,
+                    #idx: Optional[int] = None,
+                    #log_graph: bool = (False)
+                )
 
     def on_train_end(self) :
         # self.grok = self.is_grok(delay = 100)

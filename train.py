@@ -90,6 +90,7 @@ def get_parser():
     parser.add_argument("--group_name", type=str, default="base")
     parser.add_argument("--wandb_entity", type=str, default=None, help="name of the team on wandb and is optional")
     parser.add_argument("--wandb_project", type=str, default=None, help="name of the project")
+    parser.add_argument("--watch", type=bool_flag, default=False, help="https://docs.wandb.ai/ref/python/watch")
 
     return parser
 
@@ -128,6 +129,7 @@ def train(hparams: Namespace) -> None:
 
     # set up wandb
     init_wandb(hparams)  
+    
     data_flag = False
     device = "cpu"
     data_module = DataModule(
