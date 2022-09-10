@@ -5,6 +5,8 @@ from numpy import cos, sin, sqrt
 from torch import tensor, Tensor
 from typing import Tuple, List, Dict, Union
 
+non_linearities = {"relu": nn.ReLU, "gelu": nn.GELU, "lrelu" : nn.LeakyReLU()}
+
 class Linear(nn.Linear):
     def __init__(self, *args, **kwargs):
         self.weight_noise = kwargs.pop("weight_noise")
@@ -177,8 +179,6 @@ class FFN(nn.Module):
 
         d_ff = int(multiplier * d_model)
 
-        non_linearities = {"relu": nn.ReLU, "gelu": nn.GELU}
-
         self.ffn = nn.Sequential(
             Linear(d_model, d_ff, bias=False, weight_noise=weight_noise),
             non_linearities[non_linearity](),
@@ -269,6 +269,81 @@ class Decoder(nn.Module):
                 values.append(layer_values)
         return a, hidden_states, attentions, values
 
+################################
+def make_mlp(l, act=nn.LeakyReLU(), tail=[]):
+    """makes an MLP with no top layer activation"""
+    return nn.Sequential(*(sum(
+        [[nn.Linear(i, o)] + ([act] if n < len(l)-2 else [])
+         for n, (i, o) in enumerate(zip(l, l[1:]))], []) + tail))
+
+class Linear2(nn.Module):
+    """costomized linear layer"""
+    def __init__(self, in_features, out_features, bias = True, activation_function = None):
+        super(Linear2, self).__init__()
+        self.linear = nn.Linear(in_features, out_features, bias = bias)
+        self.activation_function = activation_function if activation_function else lambda x : x
+    def forward(self, x):
+        return self.activation_function(self.linear(x))
+
+class MLP(nn.Module):
+    """Multi-layer perceptron"""
+    def __init__(self, in_features, hidden_features, hidden_layers, out_features, activation_function = nn.LeakyReLU()):
+        super(MLP, self).__init__()
+        if hidden_layers == 0 :
+            self.net = Linear2(in_features, out_features, True, None)
+        else :
+            net = [Linear2(in_features, hidden_features, True, activation_function)]
+            net += [Linear2(hidden_features, hidden_features, True, activation_function) for _ in range(hidden_layers-1)]  
+            net.append(Linear2(hidden_features, out_features, True, None))
+            self.net = nn.Sequential(*net)
+        self.hidden_layers = hidden_layers
+
+    def forward(self, x, return_layers = False, residual = False):
+        zs = []
+        if not return_layers or self.hidden_layers == 0 :
+            return self.net(x), zs
+        z = x + 0.0
+        r = 1.0 if residual else 0.0
+        for linear_layer in self.net :
+            z = linear_layer(z) + r*z
+            zs.append(z.detach()) 
+        return z, zs[:-1]
+
+class DecoderMLP(nn.Module):
+    def __init__(
+        self,
+        d_model: int,
+        heads: int,
+        num_blocks: int,
+        dropout: float,
+        non_linearity: str = "relu",
+        weight_noise: float = 0.0,
+    ) -> None:
+        super().__init__()
+
+        #self.mlp = make_mlp(l = [d_model]*num_blocks, act = non_linearities[non_linearity]()) 
+        self.mlp = MLP(
+            in_features = d_model, hidden_features = d_model, 
+            hidden_layers = num_blocks, out_features = d_model, activation_function = non_linearities[non_linearity]()
+        )
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(
+        self,
+        x: Tensor,
+        self_attn_mask: Tensor = None,
+        save_activations=False,
+    ) -> Tuple[Tensor, List[List[Tensor]], List[List[Tensor]]]:
+
+        attentions = []
+        values = []
+        hidden_states = [x]
+        x, zs = self.mlp(x, return_layers = True, residual = True)
+        x = self.dropout(x) 
+        hidden_states += zs
+        return x, hidden_states, attentions, values
+
+###############
 
 class Transformer(nn.Module):
     def __init__(
@@ -300,6 +375,7 @@ class Transformer(nn.Module):
         self.register_buffer("self_attn_mask", self.make_mask(max_context_len))
 
         self.decoder = Decoder(
+        #self.decoder = DecoderMLP(
             d_model,
             n_heads,
             n_layers,

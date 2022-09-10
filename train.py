@@ -95,7 +95,6 @@ def get_parser():
     parser.add_argument("--watch", type=str2dic_all, default="", help="""
         https://docs.wandb.ai/ref/python/watch
         eg. : log=str(all),log_freq=int(1),
-    
     """)
 
     return parser
@@ -187,7 +186,7 @@ def train(hparams: Namespace) -> None:
     # Create the model
     model = TrainableTransformer(hparams).float()
 
-    # if hparams.watch:
+    # if hparams.use_wandb and hparams.watch:
     #     wandb.watch(
     #         model,
     #         #criterion=None,
