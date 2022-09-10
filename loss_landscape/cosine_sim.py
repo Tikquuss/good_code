@@ -108,29 +108,29 @@ def consine_sim_vec_from_point(model_file, model_files, lightning_module_class) 
 def plot_cosine_sim(angles : List[Dict], ylabel=None, phases : Dict = None, save_to = None) :
 
     figsize=(6*3,4*2)
-    fig, ax1 = plt.subplots(1, 1, sharex=False, sharey=False, figsize = figsize)
+    fig, ax = plt.subplots(1, 1, sharex=False, sharey=False, figsize = figsize)
     #fig.suptitle("suptitle")
 
     for angle in angles :
         v = angle['angles']
-        label = angle[label]
+        label = angle["label"]
         xs = list(range(1, len(v)+1))
-        ax1.plot(xs, v, label=label)
+        ax.plot(xs, v, label=label)
     
     if phases is not None :
         colors = ["b", 'r', 'g', 'y']
         labels = {
-            'pre_memorization_epoch' : 'pre_memorization_epoch (train_acc~5%)', 
-            'pre_comprehension_epoch' : 'pre_comprehension_epoch (val_acc~5%)', 
-            'memorization_epoch' : 'memorization_epoch (train_acc~99%)', 
-            'comprehension_epoch' : 'comprehension_epoch (val_acc~99%)'
+            'pre_memo_epoch' : 'pre_memorization_epoch (train_acc~5%)', 
+            'pre_comp_epoch' : 'pre_comprehension_epoch (val_acc~5%)', 
+            'memo_epoch' : 'memorization_epoch (train_acc~99%)', 
+            'comp_epoch' : 'comprehension_epoch (val_acc~99%)'
         }
         assert set(phases.keys()).issubset(set(labels.keys()))
         for i, k in enumerate(phases.keys()) :
-            ax1.axvline(x = phases[k], color = colors[i], label = labels[k])
+            ax.axvline(x = phases[k], color = colors[i], label = labels[k])
 
-    ax1.set(xlabel='epoch', ylabel=ylabel)
-    ax1.set_title('title')
-    ax1.legend()
+    ax.set(xlabel='epoch', ylabel=ylabel)
+    #ax.set_title('title')
+    ax.legend()
 
     if save_to is not None: fig.savefig(save_to, dpi=300, bbox_inches='tight')
