@@ -22,8 +22,8 @@ class Evaluator():
         results = self.trainer.validate(pl_module, data_loader, verbose=False)
         return [results[0][m] for m in self.metrics]
 
-    def _get_loss(self, pl_module, batch):
+    def _get_loss(self, pl_module, batch, data_size):
         """
         Given a batch of data, this function returns the  loss
         """
-        return self.get_loss(pl_module, batch)
+        return self.get_loss(pl_module, batch, data_size)

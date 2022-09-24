@@ -695,3 +695,16 @@ class TrainableTransformer(LightningModule):
         print(self.states)
         print("="*10)
         self.send_dict_to_wandb(self.states, label = "states_info", title="Phase Informations")
+
+    def on_after_backward(self):
+        # example to inspect gradient information in tensorboard
+        if self.trainer.global_step % 1 == 0:  # don't make the tf file huge
+            grad_vec = None
+            for p in self.parameters():
+                #p.grad.data.div_(batch["text"].shape[0])
+                if grad_vec is None:
+                    grad_vec = p.grad.data.view(-1)
+                else:
+                    grad_vec = torch.cat((grad_vec, p.grad.data.view(-1)))
+        
+        print(grad_vec.shape)

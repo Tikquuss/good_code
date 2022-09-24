@@ -24,21 +24,21 @@ from .plot_1D import plot_1d_eig_ratio
 from .mpi4pytorch import setup_MPI, barrier, reduce_min, reduce_max
 from .evaluation import Evaluator
 
-def get_loss(pl_module, batch):
+def get_loss(pl_module, batch, data_size):
     """
     Given a batch of data, this function returns the  loss
     """    
     tmp = pl_module._step(
         batch,
         batch_idx = 0,
-        train = True,
+        data_size = data_size,
         reduction = "mean",
         grads = False,
     ) 
     loss = tmp[0]
     return loss
 
-def crunch_hessian_eigs(surf_file, net, w, s, d, dataloader, comm, rank, args, evaluator):
+def crunch_hessian_eigs(surf_file, net, w, s, d, dataloader, data_size, comm, rank, args, evaluator):
     """
         Calculate eigen values of the hessian matrix of a given model in parallel
         using mpi reduce. This is the synchronized version.
@@ -80,7 +80,7 @@ def crunch_hessian_eigs(surf_file, net, w, s, d, dataloader, comm, rank, args, e
 
         # Compute the eign values of the hessian matrix
         compute_start = time.time()
-        maxeig, mineig, iter_count = min_max_hessian_eigs(net, dataloader, evaluator, rank=rank, 
+        maxeig, mineig, iter_count = min_max_hessian_eigs(net, dataloader, evaluator, data_size, rank=rank, 
                                                           use_cuda=args.cuda, verbose=True)
         compute_time = time.time() - compute_start
 
@@ -120,7 +120,7 @@ def crunch_hessian_eigs(surf_file, net, w, s, d, dataloader, comm, rank, args, e
     f.close()
 
 
-def crunch_hessian_eigs_2(surf_file, net, w, s, d, dataloader, comm, rank, args, evaluator):
+def crunch_hessian_eigs_2(surf_file, net, w, s, d, dataloader, data_size, comm, rank, args, evaluator):
     """
         Calculate eigen values of the hessian matrix of a given model in parallel
         using mpi reduce. This is the synchronized version.
@@ -161,7 +161,7 @@ def crunch_hessian_eigs_2(surf_file, net, w, s, d, dataloader, comm, rank, args,
 
         # Compute the eign values of the hessian matrix
         compute_start = time.time()
-        maxeig, mineig, iter_count = min_max_hessian_eigs(net, dataloader, evaluator, rank=rank, 
+        maxeig, mineig, iter_count = min_max_hessian_eigs(net, dataloader, evaluator, data_size, rank=rank, 
                                                           use_cuda=args.cuda, verbose=True)
         compute_time = time.time() - compute_start
 
@@ -193,7 +193,7 @@ def crunch_hessian_eigs_2(surf_file, net, w, s, d, dataloader, comm, rank, args,
     f.close()
 
 
-def plot_hessian_eigen(args, lightning_module_class, dataloader, get_loss) :
+def plot_hessian_eigen(args, lightning_module_class, dataloader, data_size, get_loss) :
     
     # Setting the seed
     pl.seed_everything(42)
@@ -272,7 +272,11 @@ def plot_hessian_eigen(args, lightning_module_class, dataloader, get_loss) :
     # Start the computation
     #--------------------------------------------------------------------------
     evaluator = Evaluator(get_loss = get_loss)
-    crunch_hessian_eigs(surf_file, net, w, s, d, dataloader, comm, rank, args, evaluator)
+
+    if args.mpi: crunch_function = crunch_hessian_eigs
+    else : crunch_function = crunch_hessian_eigs_2 
+    
+    crunch_function(surf_file, net, w, s, d, dataloader, data_size, comm, rank, args, evaluator)
     print ("Rank " + str(rank) + ' is done!')
 
 

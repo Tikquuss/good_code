@@ -49,7 +49,11 @@ if __name__ == '__main__':
     lightning_module_class = TrainableTransformer
 
     data_module = torch.load("/content/logs/tdp=90-wd=1-d=0.0-opt=adamw-mlr=0.001-mo+/data.pt")
-    dataloader = data_module.train_dataloader()
-    #dataloader = data_module.val_dataloader()
+    if True :
+        dataloader = data_module.train_dataloader()
+        data_size = len(data_module.train_dataset)
+    else :
+        dataloader = data_module.val_dataloader()
+        data_size = len(data_module.val_dataset)
 
-    dir_file, surf_file = plot_hessian_eigen(args, lightning_module_class, dataloader, get_loss)
+    dir_file, surf_file = plot_hessian_eigen(args, lightning_module_class, dataloader, data_size, get_loss)
