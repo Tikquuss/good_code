@@ -3,15 +3,16 @@
 """
 
 from .plot_2D import plot_trajectory as plot_traj
-from .projection import setup_PCA_directions, project_trajectory
+from .projection import setup_PCA_directions_from_point, setup_PCA_directions, project_trajectory
 from .model_loader import load
 from .net_plotter import get_weights
 
-def plot_trajectory(args, model_files, lightning_module_class) :
-    last_model_file = model_files[-1] 
-    net = load(lightning_module_class, model_file = last_model_file)
-    w = get_weights(net) # initial parameters
-    s = net.state_dict()
+def plot_trajectory(args, model_files, lightning_module_class, model_file = None) :
+    #model_file  = model_files[-1]  is model_file is None else model_file 
+    if model_file is not None :
+        net = load(lightning_module_class, model_file = model_file)
+        w = get_weights(net) # initial parameters
+        s = net.state_dict()
 
     #--------------------------------------------------------------------------
     # load or create projection directions
@@ -19,7 +20,10 @@ def plot_trajectory(args, model_files, lightning_module_class) :
     if args.dir_file:
         dir_file = args.dir_file
     else:
-        dir_file = setup_PCA_directions(args, model_files, w, s, lightning_module_class)
+        if model_file is not None :
+            dir_file = setup_PCA_directions(args, model_files, lightning_module_class)
+        else :
+            dir_file = setup_PCA_directions_from_point(args, model_files, w, s, lightning_module_class)
 
     #--------------------------------------------------------------------------
     # projection trajectory to given directions

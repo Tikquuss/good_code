@@ -2,12 +2,14 @@
     1D plotting routines
 """
 
+import imp
 from matplotlib import pyplot as pp
 import h5py
 import argparse
 import numpy as np
+import math
 
-def plot_1d_loss_err(surf_file, xmin=-1.0, xmax=1.0, loss_max=5, acc_max = 100, log=False, show=False):
+def plot_1d_loss_err(surf_file, xmin=-1.0, xmax=1.0, loss_max=None, acc_max = None, log=False, show=False, save_to = None):
     print('------------------------------------------------------------------')
     print('plot_1d_loss_err')
     print('------------------------------------------------------------------')
@@ -27,6 +29,11 @@ def plot_1d_loss_err(surf_file, xmin=-1.0, xmax=1.0, loss_max=5, acc_max = 100, 
     xmin = xmin if xmin != -1.0 else min(x)
     xmax = xmax if xmax != 1.0 else max(x)
 
+    y_loss_min, y_loss_max = min(train_loss), loss_max if loss_max else max(train_loss)
+    y_acc_min, y_acc_max = min(train_acc), acc_max if acc_max else max(train_acc)
+
+    save_to = save_to if save_to else surf_file
+
     # loss and accuracy map
     fig, ax1 = pp.subplots()
     ax2 = ax1.twinx()
@@ -39,21 +46,36 @@ def plot_1d_loss_err(surf_file, xmin=-1.0, xmax=1.0, loss_max=5, acc_max = 100, 
     if 'test_loss' in f.keys():
         test_loss = f['test_loss'][:]
         test_acc = f['test_acc'][:]
+        y_loss_min, y_loss_max = min(y_loss_min, min(test_loss)), max(y_loss_max, max(test_loss))
+        y_acc_min, y_acc_max = min(y_acc_min, min(test_acc)), max(y_acc_max, max(test_acc))
         if log:
             te_loss, = ax1.semilogy(x, test_loss, 'b--', label='Test loss', linewidth=1)
         else:
             te_loss, = ax1.plot(x, test_loss, 'b--', label='Test loss', linewidth=1)
         te_acc, = ax2.plot(x, test_acc, 'r--', label='Test accuracy', linewidth=1)
 
+    # err_loss = y_loss_max - y_loss_min
+    # y_loss_min -= err_loss / y_loss_max
+    # y_loss_max += err_loss / y_loss_max
+
+    # err_acc = y_acc_max - y_acc_min
+    # y_acc_min -= err_acc / 100
+    # y_acc_max += err_acc / 100
+
+    #if log: y_loss_min, y_loss_max = math.log(y_loss_min, math.e), math.log(y_loss_max, math.e)
+
+
     pp.xlim(xmin, xmax)
     ax1.set_ylabel('Loss', color='b', fontsize='xx-large')
     ax1.tick_params('y', colors='b', labelsize='x-large')
     ax1.tick_params('x', labelsize='x-large')
-    ax1.set_ylim(0, loss_max)
+    #ax1.set_ylim(0, loss_max)
+    ax1.set_ylim(y_loss_min, y_loss_max)
     ax2.set_ylabel('Accuracy', color='r', fontsize='xx-large')
     ax2.tick_params('y', colors='r', labelsize='x-large')
-    ax2.set_ylim(0, acc_max)
-    filename = surf_file + '_1d_loss_acc' + ('_log' if log else '')
+    #ax2.set_ylim(0, acc_max)
+    ax2.set_ylim(y_acc_min, y_acc_max)
+    filename = save_to + '_1d_loss_acc' + ('_log' if log else '')
     pp.savefig(f"{filename}.pdf", dpi=300, bbox_inches='tight', format='pdf')
     fig.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
 
@@ -65,19 +87,22 @@ def plot_1d_loss_err(surf_file, xmin=-1.0, xmax=1.0, loss_max=5, acc_max = 100, 
         pp.plot(x, train_loss)
     pp.ylabel('Training Loss', fontsize='xx-large')
     pp.xlim(xmin, xmax)
-    pp.ylim(0, loss_max)
-    filename = surf_file + '_1d_train_loss' + ('_log' if log else '')
+    #pp.ylim(0, loss_max)
+    pp.ylim(y_loss_min, y_loss_max)
+    filename = save_to + '_1d_train_loss' + ('_log' if log else '')
     pp.savefig(filename + '.pdf',
                 dpi=300, bbox_inches='tight', format='pdf')
     fig.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
 
     # train_err curve
     fig = pp.figure()
-    pp.plot(x, acc_max - train_acc)
+    tmp = 100.0 - train_acc
+    pp.plot(x, tmp)
     pp.xlim(xmin, xmax)
-    pp.ylim(0, acc_max)
+    #pp.ylim(0, acc_max)
+    pp.ylim(min(tmp), max(tmp))
     pp.ylabel('Training Error', fontsize='xx-large')
-    filename = surf_file + '_1d_train_err'
+    filename = save_to + '_1d_train_err'
     pp.savefig(filename + '.pdf', dpi=300, bbox_inches='tight', format='pdf')
     fig.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
 
@@ -86,13 +111,17 @@ def plot_1d_loss_err(surf_file, xmin=-1.0, xmax=1.0, loss_max=5, acc_max = 100, 
 
 
 def plot_1d_loss_err_repeat(prefix, idx_min=1, idx_max=10, xmin=-1.0, xmax=1.0,
-                            loss_max=5, acc_max = 100, show=False):
+                            loss_max=None, acc_max = 100, show=False, save_to = None):
     """
         Plotting multiple 1D loss surface with different directions in one figure.
     """
 
     fig, ax1 = pp.subplots()
     ax2 = ax1.twinx()
+
+    y_loss_min, y_loss_max = 0.0, 1.0e9
+    y_acc_min, y_acc_max = 0.0, 100.0
+    save_to = save_to if save_to else prefix
 
     for idx in range(idx_min, idx_max + 1):
         # The file format should be prefix_{idx}.h5
@@ -107,6 +136,9 @@ def plot_1d_loss_err_repeat(prefix, idx_min=1, idx_max=10, xmin=-1.0, xmax=1.0,
         xmin = xmin if xmin != -1.0 else min(x)
         xmax = xmax if xmax != 1.0 else max(x)
 
+        y_loss_min, y_loss_max = min(y_loss_min, min(test_loss)), max(y_loss_max, max(test_loss))
+        y_acc_min, y_acc_max = min(y_acc_min, min(test_acc)), max(y_acc_max, max(test_acc))
+
         tr_loss, = ax1.plot(x, train_loss, 'b-', label='Training loss', linewidth=1)
         te_loss, = ax1.plot(x, test_loss, 'b--', label='Testing loss', linewidth=1)
         tr_acc, = ax2.plot(x, train_acc, 'r-', label='Training accuracy', linewidth=1)
@@ -116,18 +148,20 @@ def plot_1d_loss_err_repeat(prefix, idx_min=1, idx_max=10, xmin=-1.0, xmax=1.0,
     ax1.set_ylabel('Loss', color='b', fontsize='xx-large')
     ax1.tick_params('y', colors='b', labelsize='x-large')
     ax1.tick_params('x', labelsize='x-large')
-    ax1.set_ylim(0, loss_max)
+    #ax1.set_ylim(0, loss_max)
+    ax1.set_ylim(y_loss_min, y_loss_max)
     ax2.set_ylabel('Accuracy', color='r', fontsize='xx-large')
     ax2.tick_params('y', colors='r', labelsize='x-large')
-    ax2.set_ylim(0, acc_max)
-    filename = prefix + '_1d_loss_err_repeat'
+    #ax2.set_ylim(0, acc_max)
+    ax2.set_ylim(y_acc_min, y_acc_max)
+    filename = save_to + '_1d_loss_err_repeat'
     pp.savefig(filename + '.pdf', dpi=300, bbox_inches='tight', format='pdf')
     fig.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
 
     if show: pp.show()
 
 
-def plot_1d_eig_ratio(surf_file, xmin=-1.0, xmax=1.0, val_1='min_eig', val_2='max_eig', ymax=1, show=False):
+def plot_1d_eig_ratio(surf_file, xmin=-1.0, xmax=1.0, val_1='min_eig', val_2='max_eig', ymax=None, show=False, save_to = None):
     print('------------------------------------------------------------------')
     print('plot_1d_eig_ratio')
     print('------------------------------------------------------------------')
@@ -139,18 +173,24 @@ def plot_1d_eig_ratio(surf_file, xmin=-1.0, xmax=1.0, val_1='min_eig', val_2='ma
     Z2 = np.array(f[val_2][:])
     abs_ratio = np.absolute(np.divide(Z1, Z2))
 
+    y_loss_min, y_loss_max = min(abs_ratio), ymax if ymax else max(abs_ratio)
+    save_to = save_to if save_to else surf_file
+
     pp.plot(x, abs_ratio)
     pp.xlim(xmin, xmax)
-    pp.ylim(0, ymax)
-    filename = surf_file + '_1d_eig_abs_ratio'
+    #pp.ylim(0, ymax)
+    pp.ylim(y_loss_min, y_loss_max)
+    filename = save_to + '_1d_eig_abs_ratio'
     pp.savefig(filename + '.pdf', dpi=300, bbox_inches='tight', format='pdf')
     pp.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
 
     ratio = np.divide(Z1, Z2)
+    y_loss_min, y_loss_max = min(ratio), ymax if ymax else max(ratio)
     pp.plot(x, ratio)
     pp.xlim(xmin, xmax)
-    pp.ylim(0, ymax)
-    filename = surf_file + '_1d_eig_ratio'
+    #pp.ylim(0, ymax)
+    pp.ylim(y_loss_min, y_loss_max)
+    filename = save_to + '_1d_eig_ratio'
     pp.savefig(filename + '.pdf', dpi=300, bbox_inches='tight', format='pdf')
     pp.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
 

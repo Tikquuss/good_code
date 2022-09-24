@@ -179,7 +179,87 @@ def project_trajectory(dir_file, w, s, model_files,
     return proj_file
 
 
-def setup_PCA_directions(args, model_files, w, s, lightning_module_class = None):
+def setup_PCA_directions_from_point(args, model_files, w, s, lightning_module_class = None):
+    """
+        Find PCA directions for the optimization path from the initial model
+        to the final trained model.
+
+        Returns:
+            dir_name: the h5 file that stores the directions.
+    """
+
+    # Name the .h5 file that stores the PCA directions.
+    folder_name = args.model_folder + '/PCA_from_point' + args.dir_type
+    if args.ignore:
+        folder_name += '_ignore=' + args.ignore
+    folder_name += '_save_epoch=' + str(args.save_epoch)
+    os.system('mkdir ' + folder_name)
+    dir_name = folder_name + '/directions.h5'
+
+    # skip if the direction file exists
+    if os.path.exists(dir_name):
+        f = h5py.File(dir_name, 'a')
+        if 'explained_variance_' in f.keys():
+            f.close()
+            return dir_name
+
+    # load models and prepare the optimization path matrix
+    matrix = []
+    for count, model_file in enumerate(model_files):
+        print(model_file)
+        if count%100 == 0 : 
+            #os.system('cls')
+            clear_output(wait=True)
+        net2 = load(lightning_module_class, model_file = model_file)
+        d = None
+        if args.dir_type == 'weights':
+            w2 = get_weights(net2)
+            d = get_diff_weights(w, w2)
+        elif args.dir_type == 'states':
+            s2 = net2.state_dict()
+            d = get_diff_states(s, s2)
+        if args.ignore == 'biasbn':
+            ignore_biasbn(d)
+        d = tensorlist_to_tensor(d)
+        matrix.append(d.numpy())
+
+    # Perform PCA on the optimization path matrix
+    print ("Perform PCA on the models")
+    pca = PCA(n_components=2)
+    pca.fit(np.array(matrix))
+    pc1 = np.array(pca.components_[0])
+    pc2 = np.array(pca.components_[1])
+    print("angle between pc1 and pc2: %f" % cal_angle(pc1, pc2))
+
+    print("pca.explained_variance_ratio_: %s" % str(pca.explained_variance_ratio_))
+
+    # convert vectorized directions to the same shape as models to save in h5 file.
+    if args.dir_type == 'weights':
+        xdirection = npvec_to_tensorlist(pc1, w)
+        ydirection = npvec_to_tensorlist(pc2, w)
+    elif args.dir_type == 'states':
+        xdirection = npvec_to_tensorlist(pc1, s)
+        ydirection = npvec_to_tensorlist(pc2, s)
+
+    if args.ignore == 'biasbn':
+        ignore_biasbn(xdirection)
+        ignore_biasbn(ydirection)
+
+    f = h5py.File(dir_name, 'w')
+    write_list(f, 'xdirection', xdirection)
+    write_list(f, 'ydirection', ydirection)
+
+    f['explained_variance_ratio_'] = pca.explained_variance_ratio_
+    f['singular_values_'] = pca.singular_values_
+    f['explained_variance_'] = pca.explained_variance_
+
+    f.close()
+    print ('PCA directions saved in: %s' % dir_name)
+
+    return dir_name
+
+
+def setup_PCA_directions(args, model_files, lightning_module_class = None):
     """
         Find PCA directions for the optimization path from the initial model
         to the final trained model.
@@ -210,14 +290,14 @@ def setup_PCA_directions(args, model_files, w, s, lightning_module_class = None)
         if count%100 == 0 : 
             #os.system('cls')
             clear_output(wait=True)
-        net2 = load(lightning_module_class, model_file = model_file)
+        net = load(lightning_module_class, model_file = model_file)
         d = None
         if args.dir_type == 'weights':
-            w2 = get_weights(net2)
-            d = get_diff_weights(w, w2)
+            w = get_weights(net)
+            d = None # get_diff_weights(w, 0)
         elif args.dir_type == 'states':
-            s2 = net2.state_dict()
-            d = get_diff_states(s, s2)
+            s = net.state_dict()
+            d = None # get_diff_states(s, 0)
         if args.ignore == 'biasbn':
             ignore_biasbn(d)
         d = tensorlist_to_tensor(d)

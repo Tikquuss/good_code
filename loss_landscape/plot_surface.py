@@ -74,32 +74,34 @@ def setup_surface_file(args, surf_file, dir_file):
     return surf_file
 
 
-def crunch(surf_file, net, w, s, d, dataloader, loss_key, acc_key, comm, rank, args, evaluator):
+def crunch(surf_file, net, w, s, d, dataloaders, loss_keys, acc_keys, comm, rank, args, evaluator):
     """
         Calculate the loss values and/or accuracies of modified models in parallel
         using MPI reduce.
     """
 
+    assert len(dataloaders) == len(loss_keys) == len(acc_keys)
+
     f = h5py.File(surf_file, 'r+' if rank == 0 else 'r')
-    losses, accuracies = [], []
+    losses, accuracies = {}, {}
     xcoordinates = f['xcoordinates'][:]
     ycoordinates = f['ycoordinates'][:] if 'ycoordinates' in f.keys() else None
 
-    if loss_key not in f.keys():
-        shape = xcoordinates.shape if ycoordinates is None else (len(xcoordinates),len(ycoordinates))
-        losses = -np.ones(shape=shape)
-        accuracies = -np.ones(shape=shape)
-        if rank == 0:
-            f[loss_key] = losses
-            f[acc_key] = accuracies
-    else:
-        losses = f[loss_key][:]
-        accuracies = f[acc_key][:]
-    
+    shape = xcoordinates.shape if ycoordinates is None else (len(xcoordinates),len(ycoordinates))
+    for loss_key, acc_key in zip(loss_keys, acc_keys) :
+        if loss_key not in f.keys():
+            losses[loss_key] = -np.ones(shape=shape)
+            accuracies[acc_key] = -np.ones(shape=shape)
+            f[loss_key] = losses[loss_key]
+            f[acc_key] = accuracies[acc_key]
+        else:
+            losses[loss_key] = f[loss_key][:]
+            accuracies[acc_key] = f[acc_key][:]
+        
     # Generate a list of indices of 'losses' that need to be filled in.
     # The coordinates of each unfilled index (with respect to the direction vectors
     # stored in 'd') are stored in 'coords'.
-    inds, coords, inds_nums = get_job_indices(losses, xcoordinates, ycoordinates, comm)
+    inds, coords, inds_nums = get_job_indices(losses[loss_keys[0]], xcoordinates, ycoordinates, comm)
 
     print('Computing %d values for rank %d'% (len(inds), rank))
     start_time = time.time()
@@ -116,28 +118,34 @@ def crunch(surf_file, net, w, s, d, dataloader, loss_key, acc_key, comm, rank, a
         elif args.dir_type == 'states':
             set_states(net.module if args.ngpu > 1 else net, s, d, coord)
 
-        # Record the time to compute the loss value
-        loss_start = time.time()
-        loss, acc = evaluator(net, dataloader)
-        loss_compute_time = time.time() - loss_start
+        loss_compute_time = 0
+        syc_time = 0
+        for dataloader, loss_key, acc_key in zip(dataloaders, loss_keys, acc_keys) :
 
-        # Record the result in the local array
-        losses.ravel()[ind] = loss
-        accuracies.ravel()[ind] = acc
+            # Record the time to compute the loss value
+            loss_start = time.time()
+            loss, acc = evaluator(net, dataloader)
+            loss_compute_time += time.time() - loss_start
 
-        # Send updated plot data to the master node
-        syc_start = time.time()
+            # Record the result in the local array
+            losses[loss_key].ravel()[ind] = loss
+            accuracies[acc_key].ravel()[ind] = acc
 
-        losses     = reduce_max(comm, losses)
-        accuracies = reduce_max(comm, accuracies)
+            # Send updated plot data to the master node
+            syc_start = time.time()
 
-        syc_time = time.time() - syc_start
+            losses[loss_key]     = reduce_max(comm, losses[loss_key])
+            accuracies[acc_key] = reduce_max(comm, accuracies[acc_key])
+
+            syc_time += time.time() - syc_start
+        
         total_sync += syc_time
 
         # Only the master node writes to the file - this avoids write conflicts
         if rank == 0:
-            f[loss_key][:] = losses
-            f[acc_key][:] = accuracies
+            for loss_key, acc_key in zip(loss_keys, acc_keys) :
+                f[loss_key][:] = losses[loss_key]
+                f[acc_key][:] = accuracies[acc_key]
             f.flush()
 
         print('Evaluating rank %d  %d/%d  (%.1f%%)  coord=%s \t%s= %.3f \t%s=%.2f \ttime=%.2f \tsync=%.2f' % (
@@ -151,8 +159,8 @@ def crunch(surf_file, net, w, s, d, dataloader, loss_key, acc_key, comm, rank, a
     # This is only needed to make MPI run smoothly. If this process has less work than
     # the rank0 process, then we need to keep calling reduce so the rank0 process doesn't block
     for i in range(max(inds_nums) - len(inds)):
-        losses = reduce_max(comm, losses)
-        accuracies = reduce_max(comm, accuracies)
+        losses[loss_key] = reduce_max(comm, losses[loss_key])
+        accuracies[acc_key] = reduce_max(comm, accuracies[acc_key])
 
     total_time = time.time() - start_time
     print('Rank %d done!  Total time: %.2f Sync: %.2f' % (rank, total_time, total_sync))
@@ -160,29 +168,33 @@ def crunch(surf_file, net, w, s, d, dataloader, loss_key, acc_key, comm, rank, a
     f.close()
 
 
-def crunch_2(surf_file, net, w, s, d, dataloader, loss_key, acc_key, comm, rank, args, evaluator):
+def crunch_2(surf_file, net, w, s, d, dataloaders, loss_keys, acc_keys, comm, rank, args, evaluator):
     """
         Calculate the loss values and/or accuracies of modified models
     """
 
+    assert len(dataloaders) == len(loss_keys) == len(acc_keys)
+
     f = h5py.File(surf_file, 'r+' if rank == 0 else 'r')
-    losses, accuracies = [], []
+    losses, accuracies = {}, {}
     xcoordinates = f['xcoordinates'][:]
     ycoordinates = f['ycoordinates'][:] if 'ycoordinates' in f.keys() else None
 
-    if loss_key not in f.keys():
-        shape = xcoordinates.shape if ycoordinates is None else (len(xcoordinates),len(ycoordinates))
-        losses = -np.ones(shape=shape)
-        accuracies = -np.ones(shape=shape)
-        f[loss_key] = losses
-        f[acc_key] = accuracies
-    else:
-        losses = f[loss_key][:]
-        accuracies = f[acc_key][:]
+    shape = xcoordinates.shape if ycoordinates is None else (len(xcoordinates),len(ycoordinates))
+    for loss_key, acc_key in zip(loss_keys, acc_keys) :
+        if loss_key not in f.keys():
+            losses[loss_key] = -np.ones(shape=shape)
+            accuracies[acc_key] = -np.ones(shape=shape)
+            f[loss_key] = losses[loss_key]
+            f[acc_key] = accuracies[acc_key]
+        else:
+            losses[loss_key] = f[loss_key][:]
+            accuracies[acc_key] = f[acc_key][:]
     
     if ycoordinates is None : coords = xcoordinates
     else : coords = np.array(np.meshgrid(xcoordinates, ycoordinates)).T.reshape(-1,2) # (N*N,2)
-    inds = np.array(range(losses.size))
+    #inds = np.array(range(losses.size))
+    inds = np.array(range(losses[loss_keys[0]].size))
 
     start_time = time.time()
     total_sync = 0.0
@@ -198,34 +210,29 @@ def crunch_2(surf_file, net, w, s, d, dataloader, loss_key, acc_key, comm, rank,
         elif args.dir_type == 'states':
             set_states(net.module if args.ngpu > 1 else net, s, d, coord)
 
-        # Record the time to compute the loss value
-        loss_start = time.time()
-        loss, acc = evaluator(net, dataloader)
-        loss_compute_time = time.time() - loss_start
+        loss_compute_time = 0
+        for dataloader, loss_key, acc_key in zip(dataloaders, loss_keys, acc_keys) :
+            # Record the time to compute the loss value
+            loss_start = time.time()
+            loss, acc = evaluator(net, dataloader)
+            loss_compute_time += time.time() - loss_start
 
-        # Record the result in the local array
-        losses.ravel()[ind] = loss
-        accuracies.ravel()[ind] = acc
+            # Record the result in the local array
+            losses[loss_key].ravel()[ind] = loss
+            accuracies[acc_key].ravel()[ind] = acc
 
-        # Send updated plot data to the master node
-        syc_start = time.time()
-
-        ###
-        ###
-
-        syc_time = time.time() - syc_start
-        total_sync += syc_time
-
-        print('Evaluating %d/%d  (%.1f%%)  coord=%s \t%s= %.3f \t%s=%.2f \ttime=%.2f \tsync=%.2f' % (
+        # TODO
+        print('Evaluating %d/%d  (%.1f%%)  coord=%s \t%s= %.3f \t%s=%.2f \ttime=%.2f' % (
                 count+1, len(inds), 100.0 * count/len(inds), str(coord), loss_key, loss,
-                acc_key, acc, loss_compute_time, syc_time))
+                acc_key, acc, loss_compute_time))
         
         if count%10 == 0 : 
             #os.system('cls')
             clear_output(wait=True)
 
-    f[loss_key][:] = losses
-    f[acc_key][:] = accuracies
+    for loss_key, acc_key in zip(loss_keys, acc_keys) :
+        f[loss_key][:] = losses[loss_key]
+        f[acc_key][:] = accuracies[acc_key]
     f.flush()
 
     total_time = time.time() - start_time
@@ -234,7 +241,9 @@ def crunch_2(surf_file, net, w, s, d, dataloader, loss_key, acc_key, comm, rank,
     f.close()
 
 
-def plot_surface(args, lightning_module_class, dataloader, metrics) :
+def plot_surface(args, lightning_module_class, metrics, train_dataloader = None, test_dataloader = None, save_to = None) :
+
+    assert train_dataloader or test_dataloader
 
     # Setting the seed
     pl.seed_everything(42)
@@ -311,8 +320,16 @@ def plot_surface(args, lightning_module_class, dataloader, metrics) :
     if args.mpi: crunch_function = crunch
     else : crunch_function = crunch_2 
 
-    crunch_function(surf_file, net, w, s, d, dataloader , 'train_loss', 'train_acc', comm, rank, args, evaluator)
-    #crunch_function(surf_file, net, w, s, d, dataloader, 'test_loss', 'test_acc', comm, rank, args, evaluator)
+    dataloaders, loss_keys, acc_keys = [], [], []
+    if train_dataloader :
+        #crunch_function(surf_file, net, w, s, d, train_dataloader , 'train_loss', 'train_acc', comm, rank, args, evaluator)
+        dataloaders, loss_keys, acc_keys = [train_dataloader], ['train_loss'], ['train_acc']
+    if test_dataloader :
+        #crunch_function(surf_file, net, w, s, d, test_dataloader, 'test_loss', 'test_acc', comm, rank, args, evaluator)
+        dataloaders.append(test_dataloader)
+        loss_keys.append('test_loss')
+        acc_keys.append('test_acc')
+    crunch_function(surf_file, net, w, s, d, dataloaders, loss_keys, acc_keys, comm, rank, args, evaluator)
 
     #--------------------------------------------------------------------------
     # Plot figures
@@ -323,7 +340,7 @@ def plot_surface(args, lightning_module_class, dataloader, metrics) :
         elif args.y:
             plot_2d_contour(surf_file, 'train_loss', args.vmin, args.vmax, args.vlevel, args.show)
         else:
-            plot_1d_loss_err(surf_file, args.xmin, args.xmax, args.loss_max, args.acc_max, args.log, args.show)
+            plot_1d_loss_err(surf_file, args.xmin, args.xmax, args.loss_max, args.acc_max, args.log, args.show, save_to=save_to)
 
     
     return dir_file, surf_file

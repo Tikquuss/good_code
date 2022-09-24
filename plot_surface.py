@@ -52,19 +52,18 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    
     #args.model_file = "/content/logs/tdp=90-wd=1-d=0.0-opt=adamw-mlr=0.001-mo+/checkpoints/epoch=0-val_accuracy=0.0000.ckpt"
 
     lightning_module_class = TrainableTransformer
 
     data_module = torch.load("/content/logs/tdp=90-wd=1-d=0.0-opt=adamw-mlr=0.001-mo+/data.pt")
-    dataloader = data_module.train_dataloader()
-    #dataloader = data_module.val_dataloader()
 
     dir_file, surf_file = plot_surface(
         args, 
         lightning_module_class, 
-        dataloader, 
         #metrics = ['test_loss', 'test_acc'],
         metrics = ['val_loss', 'val_accuracy'],
+        train_dataloader = data_module.train_dataloader(), 
+        test_dataloader = data_module.val_dataloader(), 
+        save_to = None
     )
