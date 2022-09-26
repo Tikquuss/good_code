@@ -192,44 +192,6 @@ def crunch_hessian_eigs_2(surf_file, net, w, s, d, dataloader, data_size, comm, 
     print('Rank %d done! Total time: %f Sync: %f '%(rank, total_time, total_sync))
     f.close()
 
-def crunch_hessian_eigs_models(model_files, lightning_module_class, dataloader, data_size, args, evaluator):
-    """
-        Calculate eigen values of the hessian matrix of a given model in parallel
-        using mpi reduce. This is the synchronized version.
-    """
-    min_eig, max_eig = [], []
-    L = len(model_files)
-
-    # Loop over all un-calculated coords
-    start_time = time.time()
-
-    for count, f in enumerate(model_files):
-
-        net = load(lightning_module_class, model_file = f)
-        if args.ngpu > 1:
-            # data parallel with multiple GPUs on a single node
-            net = nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
-        
-        # Compute the eign values of the hessian matrix
-        compute_start = time.time()
-        maxeig, mineig, iter_count = min_max_hessian_eigs(net, dataloader, evaluator, data_size, use_cuda=args.cuda, verbose=True)
-        compute_time = time.time() - compute_start
-
-        # Record the result in the local array
-        max_eig.append(maxeig)
-        min_eig.append(mineig)
-
-        print("%d/%d  (%0.2f%%) \tmaxeig:%8.5f \tmineig:%8.5f \titer: %d \ttime:%.2f" % 
-            (count + 1, L, 100.0 * (count + 1)/L, maxeig, mineig, iter_count, compute_time))
-
-        if count%10 == 0 : 
-            #os.system('cls')
-            clear_output(wait=True)
-
-    total_time = time.time() - start_time
-    print('Total time: %f '%total_time)
-
-    return min_eig, max_eig
 
 def plot_hessian_eigen(args, lightning_module_class, dataloader, data_size, get_loss) :
     
@@ -347,9 +309,43 @@ def plot_hessian_eigen_models(args, model_files, lightning_module_class, dataloa
 
     evaluator = Evaluator(get_loss = get_loss)
 
-    min_eig, max_eig = crunch_hessian_eigs_models(model_files, lightning_module_class, dataloader, data_size, args, evaluator)
+    """Calculate eigen values of the hessian matrix of a given model."""
+    min_eig, max_eig = [], []
+    L = len(model_files)
 
-    print ("Rank " + str(rank) + ' is done!')
+    # Loop over all un-calculated coords
+    start_time = time.time()
+
+    try:
+        for count, f in enumerate(model_files):
+            try:
+                net = load(lightning_module_class, model_file = f)
+                # data parallel with multiple GPUs on a single node
+                if args.ngpu > 1: net = nn.DataParallel(net, device_ids=range(torch.cuda.device_count()))
+                
+                # Compute the eign values of the hessian matrix
+                compute_start = time.time()
+                maxeig, mineig, iter_count = min_max_hessian_eigs(net, dataloader, evaluator, data_size, use_cuda=args.cuda, verbose=True)
+                compute_time = time.time() - compute_start
+
+                # Record the result in the local array
+                max_eig.append(maxeig)
+                min_eig.append(mineig)
+
+                print("%d/%d  (%0.2f%%) \tmaxeig:%8.5f \tmineig:%8.5f \titer: %d \ttime:%.2f" % 
+                    (count + 1, L, 100.0 * (count + 1)/L, maxeig, mineig, iter_count, compute_time))
+
+                if count%10 == 0 : 
+                    #os.system('cls')
+                    clear_output(wait=True)
+                    
+            except KeyboardInterrupt:
+                pass
+
+    except KeyboardInterrupt:
+        pass
+    
+    total_time = time.time() - start_time
+    print('Total time: %f '%total_time)
 
     return min_eig, max_eig
-        
