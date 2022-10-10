@@ -696,15 +696,24 @@ class TrainableTransformer(LightningModule):
         print("="*10)
         self.send_dict_to_wandb(self.states, label = "states_info", title="Phase Informations")
 
-    # def on_after_backward(self):
-    #     # example to inspect gradient information in tensorboard
-    #     if self.trainer.global_step % 1e9 == 0:  # don't make the tf file huge
-    #         grad_vec = None
-    #         for p in self.parameters():
-    #             #p.grad.data.div_(batch["text"].shape[0])
-    #             if grad_vec is None:
-    #                 grad_vec = p.grad.data.view(-1)
-    #             else:
-    #                 grad_vec = torch.cat((grad_vec, p.grad.data.view(-1)))
+
+    def on_after_backward(self):
+        if self.trainer.global_step % 1e9 == 0:  
+            grad_vec = None
+            for p in self.parameters():
+                #p.grad.data.div_(batch["text"].shape[0])
+                if grad_vec is None:
+                    grad_vec = p.grad.data.view(-1)
+                else:
+                    grad_vec = torch.cat((grad_vec, p.grad.data.view(-1)))
         
-    #     print(grad_vec.shape)
+            square_grad_norm = (grad_vec ** 2).sum()
+
+            maxeig, mineig = min_max_hessian_eigs(grad = grad_vec, net = self.transformer, method="power_iteration")
+
+            return square_grad_norm, maxeig, mineig
+
+
+
+def min_max_hessian_eigs(grad, net, method) :
+    return 0, 0

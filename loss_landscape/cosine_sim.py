@@ -112,24 +112,27 @@ def plot_cosine_sim(angles : List[Dict], ylabel=None, phases : Dict = None, save
     #fig.suptitle("suptitle")
 
     for angle in angles :
-        v = angle['angles']
-        label = angle["label"]
-        xs = list(range(1, len(v)+1))
-        ax.plot(xs, v, label=label)
+        ax.plot(angle["epochs"], angle['angles'], label=angle["label"])
     
     if phases is not None :
         colors = ["b", 'r', 'g', 'y']
+        # labels = {
+        #     'pre_memo_epoch' : 'pre_memorization_epoch (train_acc~5%)', 
+        #     'pre_comp_epoch' : 'pre_comprehension_epoch (val_acc~5%)', 
+        #     'memo_epoch' : 'memorization_epoch (train_acc~99%)', 
+        #     'comp_epoch' : 'comprehension_epoch (val_acc~99%)'
+        # }
         labels = {
-            'pre_memo_epoch' : 'pre_memorization_epoch (train_acc~5%)', 
-            'pre_comp_epoch' : 'pre_comprehension_epoch (val_acc~5%)', 
-            'memo_epoch' : 'memorization_epoch (train_acc~99%)', 
-            'comp_epoch' : 'comprehension_epoch (val_acc~99%)'
+            'pre_memo_epoch' : 'train_acc~5%', 
+            'pre_comp_epoch' : 'val_acc~5%', 
+            'memo_epoch' : 'train_acc~99%', 
+            'comp_epoch' : 'val_acc~99%'
         }
         assert set(phases.keys()).issubset(set(labels.keys()))
         for i, k in enumerate(phases.keys()) :
             ax.axvline(x = phases[k], color = colors[i], label = labels[k])
 
-    ax.set(xlabel='epoch', ylabel=ylabel)
+    ax.set(xlabel='epochs', ylabel=ylabel)
     #ax.set_title('title')
     ax.legend()
 
