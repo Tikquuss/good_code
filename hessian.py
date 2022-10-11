@@ -1,9 +1,16 @@
+"""
+```bash
+python hessian.py
+```
+"""
+
 import re
 import os 
 import shutil
 import torch
 
 from loss_landscape.utils import sorted_nicely
+from loss_landscape.cosine_sim import w_to_vec
 from src.modeling import TrainableTransformer
 
 logdir = "/content/logs/tdp=90-wd=1-d=0.0-opt=adamw-mlr=0.001-mo+"
@@ -53,7 +60,6 @@ loss, grad_vec = model._step(
 
 print(grad_vec.shape)
 
-from loss_landscape.cosine_sim import w_to_vec
 lightning_module_class = TrainableTransformer
 v = w_to_vec(model_files[0], lightning_module_class).detach()
 print(v.shape)

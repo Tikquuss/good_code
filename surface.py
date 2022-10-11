@@ -1,4 +1,8 @@
 """
+```bash
+python surface.py
+```
+
 This file illustrate how to plot the landscape as in the paper. 
 It corresponds to `train.sh 90 +`, for 800 epochs.
 

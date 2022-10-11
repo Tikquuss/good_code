@@ -47,6 +47,8 @@ def plot_cosine_sim(angles : List[Dict], ylabel=None, phases : Dict = None, save
 
     if save_to is not None: fig.savefig(save_to, dpi=300, bbox_inches='tight')
 
+    plt.show()
+
 
 # step 1 : train the model
 
@@ -89,6 +91,8 @@ print(len(tmp_model_files))
 
 # step 5 : angles, weigths level
 
+print("==== angles, weigths level ====")
+
 dir_type = 'weights'
 #dir_type = 'states'
 
@@ -100,9 +104,11 @@ angles1 = consine_sim_weights_states(tmp_model_files, dir_type, ignore, lightnin
 # angles11 = consine_sim_weights_states(tmp_model_files, dir_type, ignore, lightning_module_class)
 
 # step 6 : angles
+print("==== angles ====")
 angles2 = consine_sim_vec(tmp_model_files, lightning_module_class) 
 
 # step 7 : angles, from init
+print("==== angles, from init ====")
 angles3 = consine_sim_vec_from_point(model_files[0], tmp_model_files, lightning_module_class) 
 
 # step 8 : plot
