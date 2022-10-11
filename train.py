@@ -217,6 +217,9 @@ def train(hparams: Namespace) -> None:
         "devices" : hparams.devices,
         #"reload_dataloaders_every_n_epochs" : True,
         #"weights_summary":"full", # "top", None,
+
+        "strategy" : "ddp",
+        #"strategy" : "ddp_spawn",
     }
 
     #trainer_args["logger"] = CSVLogger(hparams.logdir)
