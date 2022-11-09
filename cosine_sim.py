@@ -28,7 +28,7 @@ def plot_cosine_sim(angles : List[Dict], ylabel=None, phases : Dict = None, save
         #     'comp_epoch' : 'comprehension_epoch (val_acc~99%)'
         # }
         labels = {
-            'pre_memo_epoch' : 'train_acc~5%)', 
+            'pre_memo_epoch' : 'train_acc~5%', 
             'pre_comp_epoch' : 'val_acc~5%', 
             'memo_epoch' : 'train_acc~99%', 
             'comp_epoch' : 'val_acc~99%'
@@ -50,77 +50,78 @@ def plot_cosine_sim(angles : List[Dict], ylabel=None, phases : Dict = None, save
     plt.show()
 
 
-# step 1 : train the model
+if __name__ == "__main__":
+    # step 1 : train the model
 
-"""
-max_epochs=800
-use_wandb=False
+    """
+    max_epochs=800
+    use_wandb=False
 
-```bash
-train.sh 90 +
-```
-"""
+    ```bash
+    train.sh 90 +
+    ```
+    """
 
-# step 2 : load the checkpoints, the data and the params
+    # step 2 : load the checkpoints, the data and the params
 
-logdir = "/content/logs/tdp=90-wd=1-d=0.0-opt=adamw-mlr=0.001-mo+"
-pretrained_folder = logdir + "/checkpoints"
+    logdir = "/content/logs/tdp=90-wd=1-d=0.0-opt=adamw-mlr=0.001-mo+"
+    pretrained_folder = logdir + "/checkpoints"
 
-#pattern = '^epoch_[0-9]+.ckpt$'
-pattern = '^epoch=[0-9]+-val_accuracy=[0-9]+\.[0-9]+.ckpt$'
+    #pattern = '^epoch_[0-9]+.ckpt$'
+    pattern = '^epoch=[0-9]+-val_accuracy=[0-9]+\.[0-9]+.ckpt$'
 
-model_files = os.listdir(pretrained_folder)
-model_files = [f for f in model_files if re.match(pattern, f)]
-model_files = sorted_nicely(model_files)
-model_files = ["init.ckpt"] + model_files
-model_files = [pretrained_folder + "/" + f for f in model_files]
+    model_files = os.listdir(pretrained_folder)
+    model_files = [f for f in model_files if re.match(pattern, f)]
+    model_files = sorted_nicely(model_files)
+    model_files = ["init.ckpt"] + model_files
+    model_files = [pretrained_folder + "/" + f for f in model_files]
 
-hparams = torch.load(logdir + "/hparams.pt")
-data_module = torch.load(logdir+"/data.pt")
-states = torch.load(logdir+"/states.pt")
+    hparams = torch.load(logdir + "/hparams.pt")
+    data_module = torch.load(logdir+"/data.pt")
+    states = torch.load(logdir+"/states.pt")
 
-phases_k = ['pre_memo_epoch', 'pre_comp_epoch', 'memo_epoch', 'comp_epoch']
-phases = [states[k] for k in phases_k]
-print(phases)
+    phases_k = ['pre_memo_epoch', 'pre_comp_epoch', 'memo_epoch', 'comp_epoch']
+    phases = [states[k] for k in phases_k]
+    print(phases)
 
 
-## step 3 : The epochs concerning by the plots 
-selected_epochs = list(range(0, 700+1, 1))
-tmp_model_files = [model_files[e] for e in selected_epochs]
-print(len(tmp_model_files))
+    ## step 3 : The epochs concerning by the plots 
+    selected_epochs = list(range(0, 700+1, 1))
+    tmp_model_files = [model_files[e] for e in selected_epochs]
+    print(len(tmp_model_files))
 
-# step 5 : angles, weigths level
+    # step 5 : angles, weigths level
 
-print("==== angles, weigths level ====")
+    print("==== angles, weigths level ====")
 
-dir_type = 'weights'
-#dir_type = 'states'
+    dir_type = 'weights'
+    #dir_type = 'states'
 
-#ignore = 'biasbn'
-ignore = ''
-angles1 = consine_sim_weights_states(tmp_model_files, dir_type, ignore, lightning_module_class)
+    #ignore = 'biasbn'
+    ignore = ''
+    angles1 = consine_sim_weights_states(tmp_model_files, dir_type, ignore, lightning_module_class)
 
-# dir_type = 'states'
-# angles11 = consine_sim_weights_states(tmp_model_files, dir_type, ignore, lightning_module_class)
+    # dir_type = 'states'
+    # angles11 = consine_sim_weights_states(tmp_model_files, dir_type, ignore, lightning_module_class)
 
-# step 6 : angles
-print("==== angles ====")
-angles2 = consine_sim_vec(tmp_model_files, lightning_module_class) 
+    # step 6 : angles
+    print("==== angles ====")
+    angles2 = consine_sim_vec(tmp_model_files, lightning_module_class) 
 
-# step 7 : angles, from init
-print("==== angles, from init ====")
-angles3 = consine_sim_vec_from_point(model_files[0], tmp_model_files, lightning_module_class) 
+    # step 7 : angles, from init
+    print("==== angles, from init ====")
+    angles3 = consine_sim_vec_from_point(model_files[0], tmp_model_files, lightning_module_class) 
 
-# step 8 : plot
+    # step 8 : plot
 
-phases_k = ['pre_memo_epoch', 'pre_comp_epoch', 'memo_epoch', 'comp_epoch']
-plot_cosine_sim(
-    angles = [
-        {"angles" : angles1, "label" : "cos_%s (θ_{i+1}, θ_{i})"%dir_type, "epochs" : selected_epochs[:-1]},
-        #{"angles" : angles2, "label" : "cos(θ_{i+1}, θ_{i})", "epochs" : selected_epochs[:-1]},
-        {"angles" : angles3, "label" : "cos(theta_{i}, theta_0)", "epochs" : selected_epochs},
-    ],
-    ylabel="consine similarity", 
-    phases = { k : states[k] for k in phases_k}, 
-    save_to = "/content/angles.png"
-)
+    phases_k = ['pre_memo_epoch', 'pre_comp_epoch', 'memo_epoch', 'comp_epoch']
+    plot_cosine_sim(
+        angles = [
+            {"angles" : angles1, "label" : "cos_%s (θ_{i+1}, θ_{i})"%dir_type, "epochs" : selected_epochs[:-1]},
+            #{"angles" : angles2, "label" : "cos(θ_{i+1}, θ_{i})", "epochs" : selected_epochs[:-1]},
+            {"angles" : angles3, "label" : "cos(theta_{i}, theta_0)", "epochs" : selected_epochs},
+        ],
+        ylabel="consine similarity", 
+        phases = { k : states[k] for k in phases_k}, 
+        save_to = "/content/angles.png"
+    )
