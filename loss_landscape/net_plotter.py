@@ -86,12 +86,18 @@ def get_random_states(states):
 
 def get_diff_weights(weights, weights2):
     """ Produce a direction from 'weights' to 'weights2'."""
-    return [w2 - w for (w, w2) in zip(weights, weights2)]
+    try :
+        return [w2 - w for (w, w2) in zip(weights, weights2)]
+    except TypeError :
+        return [w2 - weights for w2 in weights2]
 
 
 def get_diff_states(states, states2):
     """ Produce a direction from 'states' to 'states2'."""
-    return [v2 - v for (k, v), (k2, v2) in zip(states.items(), states2.items())]
+    try :
+        return [v2 - v for (k, v), (k2, v2) in zip(states.items(), states2.items())]
+    except TypeError :
+        return [v2 - states for (k2, v2) in states2.items()]
 
 
 ################################################################################

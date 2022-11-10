@@ -4,7 +4,7 @@ Load a pytorch lightning module checkpoint
 
 import torch
 
-LOG_PATH="../loss_landscape/all_logs"
+LOG_PATH="../all_logs"
 #LOG_PATH="E:/all_logs"
 
 train_data_pct=30
