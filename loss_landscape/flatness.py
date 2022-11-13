@@ -16,6 +16,7 @@ import socket
 import os
 # import sys
 import numpy as np
+from matplotlib import pyplot as plt
 import torch.nn as nn
 from IPython.display import clear_output
 from sklearn.decomposition import PCA
@@ -168,44 +169,43 @@ def crunch(dir_file, net, w, s, dataloaders, loss_keys, acc_keys, args, evaluato
     """
     assert len(dataloaders) == len(loss_keys) == len(acc_keys)
     coordinates1 = np.linspace(0, args.xmax, num=args.xnum)
-    coordinates2 = np.linspace(args.xmin, 0, num=args.xnum)
+    coordinates2 = np.linspace(0, args.xmin, num=args.xnum)
 
     L_0 = {}
     acc_0 = {}
     for dataloader, loss_key, acc_key in zip(dataloaders, loss_keys, acc_keys) :
-        # Record the time to compute the loss value
-        loss_start = time.time()
         L_0[loss_key], acc_0[acc_key] = evaluator(net, dataloader)
     
     f = h5py.File(dir_file, 'r')
-    
     """
     f['explained_variance_ratio_'] = pca.explained_variance_ratio_
     f['singular_values_'] = pca.singular_values_
     f['explained_variance_'] = pca.explained_variance_
     """
-    results_loss = []
-    results_acc = []
+    results_loss = [L_0]
+    results_acc = [acc_0]
     try :
+        start_time_ = 0
         # https://groups.google.com/g/h5py/c/3la4BMAr8DE?pli=1
         n_components = f['n_components'][()]
         for i in range(n_components) :
-            start_time = time.time()
             direction = [read_list(f, f'{i}_direction')]
-
             alpha_losses, alpha_accuracies = {}, {}
-
             for j, coordinates in enumerate([coordinates1, coordinates2]) :
-                is_done_losses, is_done_accuracies = {}, {}
                 alpha_losses[j], alpha_accuracies[j] = {}, {}
-                
+                # is_done_losses, is_done_accuracies = {}, {}
+                # for loss_key, acc_key in zip(loss_keys, acc_keys) :
+                #     is_done_losses[loss_key] = False
+                #     is_done_accuracies[acc_key] = False
+                ####################################
                 for loss_key, acc_key in zip(loss_keys, acc_keys) :
-                    is_done_losses[loss_key] = False
-                    is_done_accuracies[acc_key] = False
-
+                    alpha_losses[j][loss_key] = {}
+                    alpha_accuracies[j][acc_key] = {}
+                ####################################
                 L_coords = len(coordinates)
                 for ind, coord in enumerate(coordinates):
-                # Load the weights corresponding to those coordinates into the net
+                    start_time = time.time()
+                    # Load the weights corresponding to those coordinates into the net
                     if args.dir_type == 'weights': 
                         set_weights(net.module if args.ngpu > 1 else net, w, direction, coord)
                     elif args.dir_type == 'states':
@@ -213,41 +213,38 @@ def crunch(dir_file, net, w, s, dataloaders, loss_keys, acc_keys, args, evaluato
 
                     loss_compute_time = 0
                     for dataloader, loss_key, acc_key in zip(dataloaders, loss_keys, acc_keys) :
-                        # Record the time to compute the loss value
-                        loss_start = time.time()
                         loss, acc = evaluator(net, dataloader)
+                        alpha_losses[j][loss_key][coord] = loss
+                        alpha_accuracies[j][acc_key][coord] = acc
 
-                        if loss >= beta_loss * L_0[loss_key] and not is_done_losses[loss_key] :
-                            alpha_losses[j][loss_key] = coord
-                            is_done_losses[loss_key] = True
+                        # if loss >= beta_loss * L_0[loss_key] and not is_done_losses[loss_key] :
+                        #     alpha_losses[j][loss_key] = coord
+                        #     is_done_losses[loss_key] = True
 
-                        if acc <= beta_acc * acc_0[acc_key] and not is_done_accuracies[acc_key] :
-                            alpha_accuracies[j][acc_key] = coord
-                            is_done_accuracies[acc_key] = True
+                        # if acc <= acc_0[acc_key] / beta_acc and not is_done_accuracies[acc_key] :
+                        #     alpha_accuracies[j][acc_key] = coord
+                        #     is_done_accuracies[acc_key] = True
 
-                        loss_compute_time += time.time() - loss_start
-
-                    if all(is_done_losses.values()) and all(is_done_accuracies.values()) :
-                        break
-
-                    for loss_key, acc_key in zip(loss_keys, acc_keys):
-                        if not is_done_losses[loss_key] : alpha_losses[j][loss_key] = coord + '_last'
-                        if not is_done_accuracies[acc_key] : alpha_accuracies[j][acc_key] = coord + '_last'
-
+                    loss_compute_time += time.time() - start_time 
                     # TODO
-                    print('%s=%.2f \ttime=%.2f' % (acc_key, acc, loss_compute_time))
-                    
+                    print('%d/%d (%.1f%%) coord=%s %s=%.2f %s=%.2f \ttime=%.2f' % (
+                        ind, L_coords, 100.0*ind/L_coords, str(coord), acc_key, acc, loss_key, loss, loss_compute_time))
+
+                    # if all(is_done_losses.values()) and all(is_done_accuracies.values()) :
+                    #     break
+
                     if ind%10 == 0 : 
                         #os.system('cls')
                         clear_output(wait=True)
 
-                #for loss_key, acc_key in zip(loss_keys, acc_keys) :
-                #f[f"{i}_{loss_key}"] = alpha_losses#[loss_key]
-                #f[f"{i}_{acc_key}"] = alpha_accuracies#[acc_key]
-                results_loss.append(alpha_losses)
-                results_acc.append(alpha_accuracies)
+                # for loss_key, acc_key in zip(loss_keys, acc_keys):
+                #     if not is_done_losses[loss_key] : alpha_losses[j][loss_key] = str(coord) + '_last'
+                #     if not is_done_accuracies[acc_key] : alpha_accuracies[j][acc_key] = str(coord) + '_last'
 
-            total_time = time.time() - start_time
+            results_loss.append(alpha_losses)
+            results_acc.append(alpha_accuracies)
+
+            total_time = time.time() - start_time_ 
             print('Done!  Total time: %.2f' % (total_time))
     except OSError as e : # Unable to open file (file is already open for read-only) 
         print(e)
@@ -257,6 +254,74 @@ def crunch(dir_file, net, w, s, dataloaders, loss_keys, acc_keys, args, evaluato
 
     return results_loss, results_acc
 
+
+def plot_components(n_components, loss_keys, acc_keys, results_loss, results_acc, beta_loss, beta_acc,
+                    save_to = None, show = True):
+
+    L_0 = results_loss[0]
+    acc_0 = results_acc[0]
+
+    L, C = n_components, len(loss_keys)
+    figsize=(8*C, 5*L)
+    fig, axs = plt.subplots(L, C, sharex=False, sharey=False, figsize = figsize)
+
+    for i in range(1, n_components+1) :
+        for j, (keys, results, r_0) in enumerate(zip([loss_keys, acc_keys], [results_loss, results_acc], [L_0, acc_0])) :
+            for key in keys :
+                alpha_1, alpha_2 = 0, 0
+                x_left = list(results[i][1][key].keys())
+                x_right = list(results[i][0][key].keys())
+                x = x_left[::-1] + x_right
+                y_left = list(results[i][1][key].values())
+                y_right = list(results[i][0][key].values())
+                y = y_left[::-1] + y_right
+                label = key.split("_")[0]
+                axs[i-1][j].plot(x, y, label=label)
+
+                if 'loss' in key :
+                    for k, loss_v in enumerate(y_left) :
+                        if loss_v >= beta_loss * L_0[key] :
+                            alpha_1 = x_left[k]
+                            print(f"{label}_loss (alpha_1) = ", alpha_1)
+                            plt.axvline(x = alpha_1, color = 'b', label = f'{label}_alpha_1')
+                            break
+                    for k, loss_v in enumerate(y_right) :
+                        if loss_v >= beta_loss * L_0[key] :
+                            alpha_2 = x_right[k]
+                            print(f"{label}_loss (alpha_2) = ", alpha_2)
+                            plt.axvline(x = alpha_2, color = 'b', label = f'{label}_alpha_2')
+                            break
+                    
+                if 'acc' in key :
+                    for k, loss_v in enumerate(y_left) :
+                        if loss_v <= acc_0[key] / beta_acc : 
+                            alpha_1 = x_left[k]
+                            print(f"{label}_acc (alpha_1) = ", alpha_1)
+                            plt.axvline(x = alpha_1, color = 'b', label = f'{label}_alpha_1')
+                            break
+                    for k, loss_v in enumerate(y_right) :
+                        if loss_v <= acc_0[key] / beta_acc :
+                            alpha_2 = x_right[k]
+                            print(f"{label}_acc (alpha_2) = ", alpha_2)
+                            plt.axvline(x = alpha_2, color = 'b', label = f'{label}_alpha_2')
+                            break
+
+    for i in range(L):
+        for j in range(C) :
+            axs[i][j].legend()
+            if i==0 :
+                axs[i][j].set_title([loss_keys, acc_keys][j][0].split("_")[1])
+            if i==L-1:
+                axs[i][j].set(xlabel='alpha')
+            if j==0:
+                axs[i][j].set(ylabel=f"direction_{i}")
+
+    if save_to is not None :
+        filename = save_to + '_flatness_plot' 
+        plt.savefig(filename + '.pdf', dpi=300, bbox_inches='tight', format='pdf')
+        fig.savefig(f"{filename}.png", dpi=300, bbox_inches='tight')
+
+    if show: plt.show()
 
 def flatness(args, lightning_module_class, metrics, model_files, model_file_PCA = None, n_components = 2,
                     train_dataloader = None, test_dataloader = None, save_to = None,
@@ -331,14 +396,16 @@ def flatness(args, lightning_module_class, metrics, model_files, model_file_PCA 
 
     dataloaders, loss_keys, acc_keys = [], [], []
     if train_dataloader :
-        #crunch_function(surf_file, net, w, s, d, train_dataloader , 'train_loss', 'train_acc', comm, rank, args, evaluator)
         dataloaders, loss_keys, acc_keys = [train_dataloader], ['train_loss'], ['train_acc']
     if test_dataloader :
-        #crunch_function(surf_file, net, w, s, d, test_dataloader, 'test_loss', 'test_acc', comm, rank, args, evaluator)
         dataloaders.append(test_dataloader)
         loss_keys.append('test_loss')
         acc_keys.append('test_acc')
 
     results_loss, results_acc = crunch(dir_file, net, w, s, dataloaders, loss_keys, acc_keys, args, evaluator, beta_loss, beta_acc)
 
+    plot_components(
+        n_components, loss_keys, acc_keys, results_loss, results_acc, beta_loss, beta_acc,
+                    save_to = args.get("save_to", None), show = args.get("show", True)
+    )
     return results_loss, results_acc, dir_file
