@@ -61,7 +61,8 @@ def get_parser():
         type=str,
         default="logs",
     )
-    parser.add_argument("--save_checkpoint", type=bool_flag, default=True)     
+    parser.add_argument("--save_checkpoint", type=bool_flag, default=True)
+    parser.add_argument("--every_n_epochs", type=int, default=1, help="Number of epochs between checkpoints")     
     parser.add_argument("--load_from_ckpt", type=str, default=None)
     parser.add_argument("--eval_only", type=bool_flag, default=False) 
 
@@ -247,9 +248,11 @@ def train(hparams: Namespace) -> None:
                 dirpath=hparams.checkpoint_path,
                 save_weights_only=True,
                 filename="{epoch}-{%s:.4f}"%validation_metric,
-                mode = mode,
+                mode=mode,
                 monitor=validation_metric,
                 save_top_k=hparams.save_top_k,
+                save_last=True,
+                every_n_epochs = vars(hparams).get('every_n_epochs', 1)
         )
 
         callbacks += [early_stopping_callback, model_checkpoint_callback]
@@ -267,8 +270,22 @@ def train(hparams: Namespace) -> None:
     if not hparams.eval_only :
         # Training
         print("Training starts...")
-        model.train()
-        trainer.fit(model, datamodule=data_module, ckpt_path=hparams.load_from_ckpt)
+        """
+        try :
+            trainer.fit(model, datamodule=data_module, ckpt_path=hparams.load_from_ckpt)
+        except KeyError: 
+            # Trying to restore optimizer state but checkpoint contains only the model. This is probably due to `ModelCheckpoint.save_weights_only` being set to `True`.'
+            model = TrainableTransformer.load_from_checkpoint(hparams = AttrDict(vars(hparams)), checkpoint_path = hparams.load_from_ckpt).float()
+            model.train()
+            trainer.fit(model, datamodule=data_module)
+        #"""
+        if hparams.load_from_ckpt :
+            model = TrainableTransformer.load_from_checkpoint(hparams = AttrDict(vars(hparams)), checkpoint_path = hparams.load_from_ckpt).float()
+            model.train()
+            trainer.fit(model, datamodule=data_module)
+        else :
+            model.train()
+            trainer.fit(model, datamodule=data_module, ckpt_path=hparams.load_from_ckpt)
         print("Training completed.")
         if not data_flag :
             print("Testing starts....")

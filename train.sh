@@ -40,6 +40,8 @@ datadir=${dump_path}/data/$group_name
 #early_stopping_grokking=$none
 early_stopping_grokking="patience=int(1000),metric=str(val_accuracy),metric_threshold=float(90.0)"
 
+every_n_epochs=1
+
 ###
 python train.py \
 		--batchsize -1 \
@@ -77,6 +79,7 @@ python train.py \
 		--accelerator auto \
 		--devices auto \
 		--early_stopping_grokking $early_stopping_grokking \
+		--every_n_epochs $every_n_epochs \
 		--eval_only False \
-#		--load_from_ckpt None \
+#		--load_from_ckpt ${logdir}/last.ckpt \
 #		--operand_length \
